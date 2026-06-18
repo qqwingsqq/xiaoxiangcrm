@@ -25,7 +25,7 @@ function loadScript(key: string, secCode?: string): Promise<void> {
     const s = document.createElement('script');
     s.src = `https://webapi.amap.com/maps?v=2.0&key=${key}&plugin=AMap.Geocoder,AMap.AutoComplete`;
     s.onload = () => resolve();
-    s.onerror = () => reject();
+    s.onerror = () => reject(new Error('load failed'));
     document.head.appendChild(s);
   });
 }
@@ -36,7 +36,7 @@ export default function AddressPicker({ onSelect, onClose }: Props) {
   const markerRef = useRef<any>(null);
   const geocoderRef = useRef<any>(null);
   const autoRef = useRef<any>(null);
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [ready, setReady] = useState(false);
   const [noKey, setNoKey] = useState(false);
