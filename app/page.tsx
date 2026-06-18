@@ -415,27 +415,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 行4：快速录音 + 语音记录 */}
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 2fr' }}>
-          <Link href="/quick-record"
-            className="rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-98 transition-transform"
-            style={{ background: '#0f0f1a', border: '1px solid rgba(239,68,68,0.25)', height: 180 }}>
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20 scale-150" />
-              <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center shadow-lg shadow-red-900/50 relative z-10">
-                <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16c-2.47 0-4.52-1.8-4.93-4.15-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
-                </svg>
-              </div>
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-white">快速录音</p>
-              <p className="text-xs text-zinc-500 mt-0.5">语音跟进记录</p>
-            </div>
-          </Link>
-          <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 180 }}>
-            <VoiceRecordWidget />
-          </div>
+        {/* 行4：语音记录（全宽） */}
+        <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <VoiceRecordWidget />
         </div>
       </div>
     );
@@ -548,27 +530,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 行4：快速录音入口 + 语音记录（1:2比例） */}
-      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 2fr' }}>
-        <Link href="/quick-record"
-          className="rounded-2xl flex flex-col items-center justify-center gap-4 transition-all hover:opacity-90 active:scale-98"
-          style={{ background: '#0f0f1a', border: '1px solid rgba(239,68,68,0.3)', height: 200 }}>
-          <div className="relative">
-            <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20 scale-150" />
-            <div className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-xl shadow-red-900/50 relative z-10">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16c-2.47 0-4.52-1.8-4.93-4.15-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
-              </svg>
-            </div>
-          </div>
-          <div className="text-center">
-            <p className="text-base font-semibold text-white">快速语音记录</p>
-            <p className="text-xs text-zinc-500 mt-1">点击立即开始录音</p>
-          </div>
-        </Link>
-        <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 200 }}>
-          <VoiceRecordWidget />
-        </div>
+      {/* 行4：语音记录（全宽） */}
+      <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <VoiceRecordWidget />
       </div>
     </div>
   );
