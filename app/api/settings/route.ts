@@ -3,7 +3,7 @@ import { ensureDb } from '@/lib/db';
 
 const ALLOWED_KEYS = new Set([
   'display_name', 'phone', 'company', 'title', 'wechat_id',
-  'amap_key', 'amap_security', 'theme', 'record_shortcut',
+  'amap_key', 'amap_security', 'theme', 'record_shortcut', 'password_hash',
 ]);
 
 export async function GET() {
