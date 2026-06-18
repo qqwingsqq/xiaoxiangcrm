@@ -1,0 +1,23 @@
+{
+  "name": "小象智能 CRM",
+  "short_name": "小象CRM",
+  "description": "小象智能客户管理系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#18181b",
+  "theme_color": "#18181b",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/logo.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "shortcuts": [
+    {
+      "name": "快速语音记录",
+      "short_name": "语音记录",
+      "description": "立即开始语音跟进记录",
+      "url": "/quick-record",
+      "icons": [{ "src": "/logo.png", "sizes": "96x96" }]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { ensureDb } from '@/lib/db';
+import Anthropic from '@anthropic-ai/sdk';
+
+type Params = { params: Promise<{ id: string }> };
+
+export async function POST(_req: NextRequest, { params }: Params) {
+  const { id } = await params;
+  const db = await ensureDb();
+  const { rows: [rec] } = await db.execute({ sql: 'SELECT * FROM voice_records WHERE id = ?', args: [id] });
+
+  if (!rec) return NextResponse.json({ error: '记录不存在' }, { status: 404 });
+  if (!rec.transcript || !String(rec.transcript).trim()) return NextResponse.json({ error: '没有转写内容可以总结' }, { status: 400 });
+  if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: '未配置 ANTHROPIC_API_KEY' }, { status: 500 });
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  let message;
+  try {
+    message = await client.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 1500,
+      messages: [{
+        role: 'user',
+        content: `你是一个CRM客户跟进助手。以下是一段语音记录的转写内容，请分析并提取关键信息。
+
+转写内容：
+${rec.transcript}
+
+请以JSON格式返回（只返回JSON）：
+{
+  "title": "为这段记录起一个简短标题（10字以内）",
+  "summary": "内容摘要（100字以内，清晰描述发生了什么）",
+  "keyPoints": ["要点1", "要点2", "要点3"],
+  "followUpActions": ["需要跟进的事项1", "需要跟进的事项2"]
+}`,
+      }],
+    });
+  } catch (err) {
+    const msg = String(err);
+    let friendly = 'AI 请求失败：' + msg;
+    if (msg.includes('403') || msg.includes('forbidden') || msg.includes('not allowed'))
+      friendly = 'API Key 无权限（403）：请到 console.anthropic.com 重新生成 API Key，并更新 .env.local 后重启服务器';
+    else if (msg.includes('401'))
+      friendly = 'API Key 无效（401）：请检查 .env.local 中的 ANTHROPIC_API_KEY';
+    return NextResponse.json({ error: friendly }, { status: 500 });
+  }
+
+  const raw = message.content[0];
+  if (raw.type !== 'text') return NextResponse.json({ error: 'AI 返回异常' }, { status: 500 });
+
+  let result: { title: string; summary: string; keyPoints: string[]; followUpActions: string[] };
+  try {
+    result = JSON.parse(raw.text.replace(/```json\n?|\n?```/g, '').trim());
+  } catch {
+    return NextResponse.json({ error: 'AI 返回解析失败' }, { status: 500 });
+  }
+
+  await db.execute({
+    sql: `UPDATE voice_records SET title=?, summary=?, key_points=?, status='summarized' WHERE id=?`,
+    args: [result.title, result.summary, JSON.stringify(result.keyPoints), id],
+  });
+
+  const { rows: [updated] } = await db.execute({ sql: 'SELECT * FROM voice_records WHERE id = ?', args: [id] });
+  return NextResponse.json(updated);
+}
