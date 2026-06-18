@@ -18,9 +18,10 @@ interface Props {
   onClose: () => void;
 }
 
-function loadScript(key: string): Promise<void> {
+function loadScript(key: string, secCode?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.AMap) { resolve(); return; }
+    if (secCode) (window as any)._AMapSecurityConfig = { securityJsCode: secCode };
     const s = document.createElement('script');
     s.src = `https://webapi.amap.com/maps?v=2.0&key=${key}&plugin=AMap.Geocoder,AMap.AutoComplete`;
     s.onload = () => resolve();
@@ -46,8 +47,9 @@ export default function AddressPicker({ onSelect, onClose }: Props) {
   useEffect(() => {
     const key = localStorage.getItem('crm-amap-key') || '';
     if (!key) { setNoKey(true); return; }
+    const sec = localStorage.getItem('crm-amap-security') || '';
 
-    loadScript(key).then(() => {
+    loadScript(key, sec).then(() => {
       window.AMap.plugin(['AMap.Geocoder', 'AMap.AutoComplete'], () => {
         if (!mapRef.current) return;
 
