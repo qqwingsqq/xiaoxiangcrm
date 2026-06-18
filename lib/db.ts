@@ -85,6 +85,11 @@ export async function ensureDb(): Promise<Client> {
         is_done INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now', 'localtime'))
       )`,
+      `CREATE TABLE IF NOT EXISTS user_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT DEFAULT (datetime('now','localtime'))
+      )`,
     ], 'write');
     // Migrations
     try { await db.execute('ALTER TABLE customers ADD COLUMN wechat_id TEXT'); } catch (_) {}

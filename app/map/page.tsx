@@ -57,7 +57,7 @@ function buildInfoContent(c: Customer, color: string, label: string, manual: boo
       <p style="margin:0 0 8px;font-size:10px;color:#52525b">📍 ${c.address || '手动标记位置'}</p>
       <div style="display:flex;gap:6px">
         <a href="/customers/${c.id}" style="flex:1;text-align:center;font-size:11px;color:#60a5fa;text-decoration:none;padding:4px 6px;border:1px solid rgba(59,130,246,0.3);border-radius:6px">查看详情</a>
-        ${navUrl ? `<a href="${navUrl}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center;font-size:11px;color:#34d399;text-decoration:none;padding:4px 6px;border:1px solid rgba(52,211,153,0.3);border-radius:6px">去这里</a>` : ''}
+        ${navUrl ? `<a href="${navUrl}" onclick="try{window.open(this.href,'_system')}catch(e){};return false;" style="flex:1;text-align:center;font-size:11px;color:#34d399;text-decoration:none;padding:4px 6px;border:1px solid rgba(52,211,153,0.3);border-radius:6px;cursor:pointer">去这里</a>` : ''}
       </div>
     </div>
   `;
@@ -118,11 +118,25 @@ export default function MapPage() {
   };
 
   useEffect(() => {
-    setApiKey(localStorage.getItem('crm-amap-key') || '');
-    setSecCode(localStorage.getItem('crm-amap-security') || '');
+    // Load from localStorage immediately for fast init
+    const localKey = localStorage.getItem('crm-amap-key') || '';
+    const localSec = localStorage.getItem('crm-amap-security') || '';
+    setApiKey(localKey);
+    setSecCode(localSec);
     fetchCustomers();
     const id = new URLSearchParams(window.location.search).get('id');
     if (id) targetIdRef.current = Number(id);
+    // Fetch from server in background (may override localStorage)
+    fetch('/api/settings').then(r => r.json()).then((data: Record<string, string>) => {
+      const serverKey = data.amap_key || '';
+      const serverSec = data.amap_security || '';
+      if (serverKey && serverKey !== localKey) {
+        localStorage.setItem('crm-amap-key', serverKey);
+        localStorage.setItem('crm-amap-security', serverSec);
+        setApiKey(serverKey);
+        setSecCode(serverSec);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => { markingModeRef.current = markingMode; }, [markingMode]);
@@ -664,10 +678,10 @@ export default function MapPage() {
                       查看详情
                     </a>
                     {itemNavUrl && (
-                      <a href={itemNavUrl} target="_blank" rel="noopener noreferrer"
-                         style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '5px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', textDecoration: 'none' }}>
+                      <button onClick={() => { try { window.open(itemNavUrl, '_system'); } catch { window.open(itemNavUrl, '_blank'); } }}
+                         style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '5px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', cursor: 'pointer' }}>
                         去这里
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>
