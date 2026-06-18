@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const AddressPicker = dynamic(() => import('./AddressPicker'), { ssr: false });
 
 const CUSTOMER_TYPES = [
   { value: 'dealer', label: '经销商' },
@@ -38,6 +41,7 @@ export default function CustomerForm({ initial, customerId }: Props) {
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
 
   const set = (field: keyof FormData, value: string | string[]) =>
     setForm(f => ({ ...f, [field]: value }));
@@ -75,6 +79,13 @@ export default function CustomerForm({ initial, customerId }: Props) {
   };
 
   return (
+    <>
+    {showPicker && (
+      <AddressPicker
+        onSelect={(addr) => { set('address', addr); setShowPicker(false); }}
+        onClose={() => setShowPicker(false)}
+      />
+    )}
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
         <div className="px-4 py-3 rounded-lg text-sm text-red-400" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
@@ -104,8 +115,19 @@ export default function CustomerForm({ initial, customerId }: Props) {
 
         <div className="sm:col-span-2">
           <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>地址</label>
-          <input type="text" value={form.address} onChange={e => set('address', e.target.value)}
-            placeholder="请输入客户地址" className={inputClass} style={inputStyle} />
+          <div className="flex gap-2">
+            <input type="text" value={form.address} onChange={e => set('address', e.target.value)}
+              placeholder="请输入客户地址" className={inputClass} style={inputStyle} />
+            <button type="button" onClick={() => setShowPicker(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium flex-shrink-0 transition-colors"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              地图选点
+            </button>
+          </div>
         </div>
 
         <div>
@@ -184,5 +206,6 @@ export default function CustomerForm({ initial, customerId }: Props) {
         </button>
       </div>
     </form>
+    </>
   );
 }
