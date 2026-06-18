@@ -32,7 +32,7 @@ function loadScript(key: string, secCode?: string): Promise<void> {
     if (secCode) window._AMapSecurityConfig = { securityJsCode: secCode };
     if (window.AMap) { resolve(); return; }
     const s = document.createElement('script');
-    s.src = `https://webapi.amap.com/maps?v=2.0&key=${key}&plugin=AMap.Geocoder`;
+    s.src = `https://webapi.amap.com/maps?v=2.0&key=${key}&plugin=AMap.Geocoder,AMap.Geolocation`;
     s.onload = () => resolve();
     s.onerror = () => reject(new Error('script load failed'));
     document.head.appendChild(s);
@@ -275,13 +275,33 @@ export default function MapPage() {
   }, [apiKey, secCode, filter, customers]);
 
   const locateMe = () => {
-    if (!navigator.geolocation) { setLocateError('浏览器不支持定位'); return; }
+    if (!window.AMap) { setLocateError('地图未加载，请稍候再试'); return; }
     setLocating(true); setLocateError('');
-    navigator.geolocation.getCurrentPosition(
-      pos => { setMyLocation([pos.coords.longitude, pos.coords.latitude]); setLocating(false); },
-      () => { setLocateError('定位失败，请检查权限'); setLocating(false); },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+    // Use AMap.Geolocation: returns GCJ02 coords (matches map), IP fallback in China
+    window.AMap.plugin('AMap.Geolocation', () => {
+      const geo = new window.AMap.Geolocation({
+        enableHighAccuracy: true,
+        timeout: 10000,
+        GeoLocationFirst: false,
+      });
+      geo.getCurrentPosition((status: string, result: any) => {
+        setLocating(false);
+        if (status === 'complete' && result.position) {
+          setMyLocation([result.position.lng, result.position.lat]);
+        } else {
+          // Fallback to browser geolocation
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              pos => setMyLocation([pos.coords.longitude, pos.coords.latitude]),
+              () => setLocateError('定位失败，请检查位置权限设置'),
+              { timeout: 8000 }
+            );
+          } else {
+            setLocateError('定位失败：' + (result.message || '请检查位置权限'));
+          }
+        }
+      });
+    });
   };
 
   const flyTo = (item: GeoItem) => {
