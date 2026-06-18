@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import VoiceRecordWidget from './VoiceRecordWidget';
 import CalendarWidget from './CalendarWidget';
@@ -144,6 +144,42 @@ function LocationContent({ locations }: { locations: DashData['customerLocations
   );
 }
 
+// ── 上传文档按钮 ──────────────────────────────────────
+function UploadDocButton({ followUpId, customerId }: { followUpId: number; customerId?: number }) {
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !customerId) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('customer_id', String(customerId));
+    fd.append('follow_up_id', String(followUpId));
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    setUploading(false);
+    if (res.ok) { setDone(true); setTimeout(() => setDone(false), 3000); }
+    e.target.value = '';
+  };
+
+  return (
+    <span className="flex-shrink-0" onClick={e => { e.preventDefault(); e.stopPropagation(); }}>
+      <input ref={inputRef} type="file" className="hidden" onChange={handleFile}
+        accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.png,.jpg,.jpeg" />
+      <button onClick={() => inputRef.current?.click()} disabled={uploading || !customerId}
+        style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '6px',
+          background: done ? 'rgba(16,185,129,0.1)' : 'rgba(59,130,246,0.1)',
+          border: `1px solid ${done ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.25)'}`,
+          color: done ? '#34d399' : '#60a5fa', cursor: 'pointer', opacity: uploading ? 0.6 : 1,
+          whiteSpace: 'nowrap' }}>
+        {uploading ? '上传中…' : done ? '✓ 已上传' : '📎 文档'}
+      </button>
+    </span>
+  );
+}
+
 // ══════════════════════════════════════════════════════
 export default function DashboardPage() {
   const { device } = useDevice();
@@ -268,14 +304,14 @@ export default function DashboardPage() {
           <CardHeader title="近期跟进" />
           <div className="space-y-2">
             {(data?.recentFollowUps || []).slice(0, 4).map(f => (
-              <Link key={f.id} href={`/customers/${f.customer_id || 0}`}
-                className="flex items-start gap-2.5 px-2 py-2 rounded-xl group" style={{ background: 'var(--bg-inner)' }}>
+              <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
                 <div className="w-1 self-stretch rounded-full flex-shrink-0 mt-0.5" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280' }} />
-                <div className="min-w-0">
+                <Link href={`/customers/${f.customer_id || 0}`} className="flex-1 min-w-0 group">
                   <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
                   <p className="text-xs text-zinc-500">{f.customer_name} · {f.created_at.substring(0, 10)}</p>
-                </div>
-              </Link>
+                </Link>
+                <UploadDocButton followUpId={f.id} customerId={f.customer_id} />
+              </div>
             ))}
             {(data?.recentFollowUps || []).length === 0 && <p className="text-xs text-zinc-600 text-center py-2">暂无跟进记录</p>}
           </div>
@@ -407,14 +443,14 @@ export default function DashboardPage() {
             <CardHeader title="近期跟进" />
             <div className="flex-1 overflow-y-auto space-y-2">
               {(data?.recentFollowUps || []).slice(0, 4).map(f => (
-                <Link key={f.id} href={`/customers/${f.customer_id || 0}`}
-                  className="flex gap-2.5 p-2 rounded-xl hover:bg-zinc-800 transition-colors group block" style={{ background: 'var(--bg-inner)' }}>
-                  <div className="w-1 rounded-full flex-shrink-0 mt-0.5" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280', alignSelf: 'stretch' }} />
-                  <div className="flex-1 min-w-0">
+                <div key={f.id} className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
+                  <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280' }} />
+                  <Link href={`/customers/${f.customer_id || 0}`} className="flex-1 min-w-0 group">
                     <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
                     <p className="text-xs text-zinc-500">{f.customer_name} · {f.created_at.substring(0, 10)}</p>
-                  </div>
-                </Link>
+                  </Link>
+                  <UploadDocButton followUpId={f.id} customerId={f.customer_id} />
+                </div>
               ))}
               {(data?.recentFollowUps || []).length === 0 && <p className="text-xs text-zinc-600 text-center py-4">暂无跟进记录</p>}
             </div>
@@ -526,15 +562,15 @@ export default function DashboardPage() {
           <CardHeader title="近期跟进记录" />
           <div className="flex-1 overflow-y-auto space-y-2">
             {(data?.recentFollowUps || []).map(f => (
-              <Link key={f.id} href={`/customers/${f.customer_id || 0}`}
-                className="flex gap-3 p-3 rounded-xl hover:bg-zinc-800 transition-colors group block" style={{ background: 'var(--bg-inner)' }}>
-                <div className="w-1 rounded-full flex-shrink-0" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280', alignSelf: 'stretch' }} />
-                <div className="flex-1 min-w-0">
+              <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
+                <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280' }} />
+                <Link href={`/customers/${f.customer_id || 0}`} className="flex-1 min-w-0 group hover:opacity-80">
                   <p className="text-sm font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
                   <p className="text-xs text-zinc-500 mt-0.5">{f.customer_name} · {f.created_at.substring(0, 10)}</p>
                   {f.content && <p className="text-xs text-zinc-600 mt-0.5 line-clamp-1">{f.content}</p>}
-                </div>
-              </Link>
+                </Link>
+                <UploadDocButton followUpId={f.id} customerId={f.customer_id} />
+              </div>
             ))}
             {(data?.recentFollowUps || []).length === 0 && <p className="text-sm text-zinc-600 text-center py-6">暂无跟进记录</p>}
           </div>

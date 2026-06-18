@@ -1,7 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { getAudio, deleteAudio } from '@/lib/audioStorage';
+import dynamic from 'next/dynamic';
+
+const MindMapModal = dynamic(() => import('./MindMapModal'), { ssr: false });
 
 interface VoiceRecord {
   id: number;
@@ -16,11 +20,7 @@ interface VoiceRecord {
   created_at: string;
 }
 
-interface Customer {
-  id: number;
-  name: string;
-  type: string;
-}
+interface Customer { id: number; name: string; type: string; }
 
 function fmtTime(s: number | null) {
   if (!s) return '';
@@ -28,15 +28,96 @@ function fmtTime(s: number | null) {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
+// ── Audio player component ────────────────────────────────
+function AudioPlayer({ recordId }: { recordId: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
+  const prevUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    getAudio(recordId).then(blob => {
+      if (blob) {
+        const objUrl = URL.createObjectURL(blob);
+        setUrl(objUrl);
+        prevUrlRef.current = objUrl;
+      }
+      setChecked(true);
+    });
+    return () => { if (prevUrlRef.current) URL.revokeObjectURL(prevUrlRef.current); };
+  }, [recordId]);
+
+  if (!checked) return null;
+  if (!url) return null;
+
+  return (
+    <div style={{ marginTop: '8px' }}>
+      <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>🎵 录音文件（本设备）</p>
+      <audio controls src={url} style={{ width: '100%', height: '32px', borderRadius: '8px', outline: 'none' }} />
+      <a href={url} download={`录音_${recordId}.webm`}
+        style={{ display: 'inline-block', marginTop: '4px', fontSize: '11px', color: '#60a5fa' }}>
+        ↓ 下载录音
+      </a>
+    </div>
+  );
+}
+
+// ── Schedule add inline form ──────────────────────────────
+function AddToCalendar({ text, onAdded }: { text: string; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const today = new Date().toISOString().substring(0, 10);
+  const [date, setDate] = useState(today);
+  const [time, setTime] = useState('09:00');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    await fetch('/api/calendar-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: text.substring(0, 60), event_date: date, event_time: time, description: text }),
+    });
+    setSaving(false);
+    setOpen(false);
+    onAdded();
+  };
+
+  if (open) {
+    return (
+      <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '10px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+        <p style={{ fontSize: '11px', color: '#93c5fd', marginBottom: '6px', fontWeight: 500 }}>📅 加入日程</p>
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            style={{ flex: 1, padding: '4px 8px', borderRadius: '6px', fontSize: '11px', background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', outline: 'none' }} />
+          <input type="time" value={time} onChange={e => setTime(e.target.value)}
+            style={{ width: '80px', padding: '4px 6px', borderRadius: '6px', fontSize: '11px', background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', outline: 'none' }} />
+        </div>
+        <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</p>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button onClick={() => setOpen(false)} style={{ flex: 1, padding: '4px 0', borderRadius: '6px', fontSize: '11px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>取消</button>
+          <button onClick={save} disabled={saving} style={{ flex: 2, padding: '4px 0', borderRadius: '6px', fontSize: '11px', background: '#2563eb', border: 'none', color: 'white', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? '保存中…' : '确认加入'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={() => setOpen(true)}
+      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60a5fa', cursor: 'pointer', marginLeft: '6px', flexShrink: 0 }}>
+      + 加入日程
+    </button>
+  );
+}
+
+// ── Assign modal ─────────────────────────────────────────
 function AssignModal({ record, customers, onClose, onAssigned }: {
-  record: VoiceRecord;
-  customers: Customer[];
-  onClose: () => void;
-  onAssigned: (r: VoiceRecord) => void;
+  record: VoiceRecord; customers: Customer[];
+  onClose: () => void; onAssigned: (r: VoiceRecord) => void;
 }) {
-  const [customerId, setCustomerId] = useState<string>('');
+  const [customerId, setCustomerId] = useState('');
   const [followUps, setFollowUps] = useState<{ id: number; title: string }[]>([]);
-  const [followUpId, setFollowUpId] = useState<string>('');
+  const [followUpId, setFollowUpId] = useState('');
   const [createNew, setCreateNew] = useState(true);
   const [newTitle, setNewTitle] = useState(record.title || record.transcript?.substring(0, 30) || '语音跟进记录');
   const [saving, setSaving] = useState(false);
@@ -50,24 +131,15 @@ function AssignModal({ record, customers, onClose, onAssigned }: {
     if (!customerId) { alert('请选择客户'); return; }
     setSaving(true);
     let fId = followUpId ? Number(followUpId) : null;
-
-    // If creating new follow-up
     if (createNew || !fId) {
       const res = await fetch(`/api/customers/${customerId}/follow-ups`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTitle,
-          content: record.transcript,
-          follow_up_date: new Date().toISOString().substring(0, 10),
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle, content: record.transcript, follow_up_date: new Date().toISOString().substring(0, 10) }),
       });
       if (res.ok) fId = (await res.json()).id;
     }
-
     const res = await fetch(`/api/voice-records/${record.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customer_id: Number(customerId), follow_up_id: fId, status: 'assigned' }),
     });
     if (res.ok) onAssigned(await res.json());
@@ -88,14 +160,11 @@ function AssignModal({ record, customers, onClose, onAssigned }: {
             </svg>
           </button>
         </div>
-
-        {/* 转写预览 */}
         {record.transcript && (
           <div className="p-3 rounded-xl text-xs text-zinc-400 leading-relaxed max-h-24 overflow-y-auto" style={{ background: '#111' }}>
             {record.transcript.substring(0, 200)}{record.transcript.length > 200 ? '...' : ''}
           </div>
         )}
-
         <div className="space-y-3">
           <div>
             <label className="text-xs text-zinc-400 mb-1 block">选择客户</label>
@@ -106,21 +175,17 @@ function AssignModal({ record, customers, onClose, onAssigned }: {
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-
           {customerId && (
             <div>
               <label className="text-xs text-zinc-400 mb-1.5 block">跟进记录</label>
               <div className="flex gap-2 mb-2">
                 <button onClick={() => setCreateNew(true)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${createNew ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white'}`}
-                  style={!createNew ? { background: '#111', border: '1px solid var(--border)' } : {}}>
-                  新建跟进
-                </button>
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${createNew ? 'bg-blue-600 text-white' : 'text-zinc-400'}`}
+                  style={!createNew ? { background: '#111', border: '1px solid var(--border)' } : {}}>新建跟进</button>
                 <button onClick={() => setCreateNew(false)} disabled={followUps.length === 0}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${!createNew ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white'}`}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${!createNew ? 'bg-blue-600 text-white' : 'text-zinc-400'}`}
                   style={createNew ? { background: '#111', border: '1px solid var(--border)' } : {}}>
-                  添加到已有 ({followUps.length})
-                </button>
+                  已有 ({followUps.length})</button>
               </div>
               {createNew ? (
                 <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)}
@@ -138,7 +203,6 @@ function AssignModal({ record, customers, onClose, onAssigned }: {
             </div>
           )}
         </div>
-
         <button onClick={handleSave} disabled={!customerId || saving}
           className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium transition-colors">
           {saving ? '保存中...' : '确认归属'}
@@ -148,6 +212,7 @@ function AssignModal({ record, customers, onClose, onAssigned }: {
   );
 }
 
+// ── Main widget ───────────────────────────────────────────
 export default function VoiceRecordWidget() {
   const [records, setRecords] = useState<VoiceRecord[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -155,14 +220,12 @@ export default function VoiceRecordWidget() {
   const [assigning, setAssigning] = useState<VoiceRecord | null>(null);
   const [summarizing, setSummarizing] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [mindMap, setMindMap] = useState<VoiceRecord | null>(null);
+  const [calendarAdded, setCalendarAdded] = useState<Set<string>>(new Set());
 
   const load = async () => {
-    const [rRes, cRes] = await Promise.all([
-      fetch('/api/voice-records'),
-      fetch('/api/customers'),
-    ]);
-    const recs: VoiceRecord[] = await rRes.json();
-    setRecords(recs);
+    const [rRes, cRes] = await Promise.all([fetch('/api/voice-records'), fetch('/api/customers')]);
+    setRecords(await rRes.json());
     setCustomers(await cRes.json());
     setLoading(false);
   };
@@ -176,8 +239,7 @@ export default function VoiceRecordWidget() {
       const updated = await res.json();
       setRecords(r => r.map(x => x.id === id ? { ...x, ...updated } : x));
     } else {
-      const e = await res.json();
-      alert(e.error || 'AI 总结失败');
+      const e = await res.json(); alert(e.error || 'AI 总结失败');
     }
     setSummarizing(null);
   };
@@ -185,7 +247,12 @@ export default function VoiceRecordWidget() {
   const deleteRecord = async (id: number) => {
     if (!confirm('确认删除这条语音记录？')) return;
     await fetch(`/api/voice-records/${id}`, { method: 'DELETE' });
+    await deleteAudio(id).catch(() => {});
     setRecords(r => r.filter(x => x.id !== id));
+  };
+
+  const markCalendarAdded = (key: string) => {
+    setCalendarAdded(prev => new Set([...prev, key]));
   };
 
   const unassignedCount = records.filter(r => !r.customer_id).length;
@@ -195,11 +262,19 @@ export default function VoiceRecordWidget() {
       {assigning && (
         <AssignModal record={assigning} customers={customers}
           onClose={() => setAssigning(null)}
-          onAssigned={updated => {
-            setRecords(r => r.map(x => x.id === updated.id ? { ...x, ...updated } : x));
-            setAssigning(null);
-          }} />
+          onAssigned={updated => { setRecords(r => r.map(x => x.id === updated.id ? { ...x, ...updated } : x)); setAssigning(null); }} />
       )}
+      {mindMap && (() => {
+        const kps: string[] = (() => { try { return JSON.parse(mindMap.key_points); } catch { return []; } })();
+        return (
+          <MindMapModal
+            title={mindMap.title || mindMap.created_at.substring(0, 16) + ' 的录音'}
+            summary={mindMap.summary || ''}
+            keyPoints={kps}
+            onClose={() => setMindMap(null)}
+          />
+        );
+      })()}
 
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -230,17 +305,18 @@ export default function VoiceRecordWidget() {
             <Link href="/quick-record" className="text-xs text-blue-400 hover:text-blue-300">立即开始录音 →</Link>
           </div>
         ) : (
-          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
             {records.map(r => {
               const keyPoints: string[] = (() => { try { return JSON.parse(r.key_points); } catch { return []; } })();
               const isExpanded = expanded === r.id;
               const isPending = !r.customer_id;
+              const hasSummary = !!r.summary;
 
               return (
                 <div key={r.id} className="rounded-xl overflow-hidden"
                   style={{ background: '#1c1c1f', border: `1px solid ${isPending ? 'rgba(245,158,11,0.25)' : 'var(--border)'}` }}>
+                  {/* Header row */}
                   <div className="flex items-start gap-2.5 p-3">
-                    {/* Mic icon */}
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                       style={{ background: isPending ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)' }}>
                       <svg className={`w-3.5 h-3.5 ${isPending ? 'text-amber-400' : 'text-blue-400'}`} fill="currentColor" viewBox="0 0 24 24">
@@ -255,13 +331,9 @@ export default function VoiceRecordWidget() {
                         </span>
                         {r.duration && <span className="text-xs text-zinc-600">{fmtTime(r.duration)}</span>}
                         {r.customer_name && (
-                          <span className="text-xs px-1.5 py-0.5 rounded text-blue-400" style={{ background: 'rgba(59,130,246,0.1)' }}>
-                            {r.customer_name}
-                          </span>
+                          <span className="text-xs px-1.5 py-0.5 rounded text-blue-400" style={{ background: 'rgba(59,130,246,0.1)' }}>{r.customer_name}</span>
                         )}
-                        {isPending && (
-                          <span className="text-xs text-amber-500">待归属</span>
-                        )}
+                        {isPending && <span className="text-xs text-amber-500">待归属</span>}
                       </div>
                       {r.summary ? (
                         <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{r.summary}</p>
@@ -270,8 +342,8 @@ export default function VoiceRecordWidget() {
                       ) : null}
                     </div>
 
-                    {/* Actions */}
                     <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* Expand */}
                       {r.transcript && (
                         <button onClick={() => setExpanded(isExpanded ? null : r.id)}
                           className="p-1.5 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors">
@@ -280,6 +352,15 @@ export default function VoiceRecordWidget() {
                           </svg>
                         </button>
                       )}
+                      {/* Mind map */}
+                      {hasSummary && keyPoints.length > 0 && (
+                        <button onClick={() => setMindMap(r)} title="思维导图"
+                          className="text-xs px-2 py-1 rounded-lg font-medium transition-colors"
+                          style={{ background: 'rgba(168,85,247,0.1)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.2)' }}>
+                          🗺️
+                        </button>
+                      )}
+                      {/* AI summarize */}
                       {r.transcript && !r.summary && (
                         <button onClick={() => summarize(r.id)} disabled={summarizing === r.id}
                           className="text-xs px-2 py-1 rounded-lg font-medium transition-colors disabled:opacity-50"
@@ -288,6 +369,7 @@ export default function VoiceRecordWidget() {
                           {summarizing === r.id ? '...' : '✨'}
                         </button>
                       )}
+                      {/* Assign */}
                       {isPending && (
                         <button onClick={() => setAssigning(r)}
                           className="text-xs px-2 py-1 rounded-lg text-amber-400 hover:text-amber-300 font-medium transition-colors"
@@ -295,6 +377,7 @@ export default function VoiceRecordWidget() {
                           归属
                         </button>
                       )}
+                      {/* Delete */}
                       <button onClick={() => deleteRecord(r.id)}
                         className="p-1.5 rounded-lg text-zinc-700 hover:text-red-400 hover:bg-zinc-800 transition-colors">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -306,25 +389,40 @@ export default function VoiceRecordWidget() {
 
                   {/* Expanded content */}
                   {isExpanded && (
-                    <div className="px-3 pb-3 pt-1 border-t space-y-2" style={{ borderColor: '#2a2a2e' }}>
+                    <div className="px-3 pb-3 pt-1 border-t space-y-3" style={{ borderColor: '#2a2a2e' }}>
+                      {/* Audio player */}
+                      <AudioPlayer recordId={r.id} />
+
                       {r.summary && (
                         <div>
                           <p className="text-xs text-zinc-500 mb-1">📋 摘要</p>
                           <p className="text-xs text-zinc-300 leading-relaxed">{r.summary}</p>
                         </div>
                       )}
+
                       {keyPoints.length > 0 && (
                         <div>
-                          <p className="text-xs text-zinc-500 mb-1">✨ 要点</p>
-                          <ul className="space-y-0.5">
-                            {keyPoints.map((p, i) => (
-                              <li key={i} className="text-xs text-zinc-400 flex gap-1.5">
-                                <span className="text-blue-500 flex-shrink-0">{i + 1}.</span>{p}
-                              </li>
-                            ))}
+                          <p className="text-xs text-zinc-500 mb-1.5">✨ 要点 <span style={{ color: '#64748b', fontWeight: 400 }}>— 可加入日程</span></p>
+                          <ul className="space-y-1.5">
+                            {keyPoints.map((p, i) => {
+                              const key = `${r.id}-kp-${i}`;
+                              const added = calendarAdded.has(key);
+                              return (
+                                <li key={i} className="flex items-start gap-1.5">
+                                  <span className="text-blue-500 flex-shrink-0 mt-0.5">{i + 1}.</span>
+                                  <span className="text-xs text-zinc-400 flex-1">{p}</span>
+                                  {added ? (
+                                    <span style={{ fontSize: '10px', color: '#10b981', flexShrink: 0 }}>✓ 已加入</span>
+                                  ) : (
+                                    <AddToCalendar text={p} onAdded={() => markCalendarAdded(key)} />
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}
+
                       {r.transcript && !r.summary && (
                         <div>
                           <p className="text-xs text-zinc-500 mb-1">转写文字</p>

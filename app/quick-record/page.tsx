@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { saveAudio } from '@/lib/audioStorage';
 
 type Phase = 'idle' | 'recording' | 'paused' | 'done' | 'saving' | 'saved';
 
@@ -60,6 +61,9 @@ export default function QuickRecordPage() {
   const [supported, setSupported] = useState(true);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const transcriptRef = useRef('');
@@ -131,12 +135,25 @@ export default function QuickRecordPage() {
 
   const startRecording = async () => {
     setError('');
+    let stream: MediaStream;
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
       setError('无法获取麦克风权限，请在浏览器设置中允许');
       return;
     }
+    streamRef.current = stream;
+
+    // Start MediaRecorder for audio file capture
+    audioChunksRef.current = [];
+    try {
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/ogg') ? 'audio/ogg' : '';
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.start(1000);
+      mediaRecorderRef.current = mr;
+    } catch {}
 
     const rec = createRecognition();
     if (!rec) return;
@@ -156,12 +173,14 @@ export default function QuickRecordPage() {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.pause();
     stopTimer();
     setPhase('paused');
     setInterimText('');
   };
 
   const resumeRecording = () => {
+    if (mediaRecorderRef.current?.state === 'paused') mediaRecorderRef.current.resume();
     const rec = createRecognition();
     if (!rec) return;
     recognitionRef.current = rec;
@@ -176,6 +195,12 @@ export default function QuickRecordPage() {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    // Stop all stream tracks
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
     stopTimer();
     setInterimText('');
     setPhase('done');
@@ -192,6 +217,14 @@ export default function QuickRecordPage() {
     if (res.ok) {
       const data = await res.json();
       setSavedId(data.id);
+      // Save audio blob to IndexedDB (client-side, same device playback)
+      if (audioChunksRef.current.length > 0) {
+        try {
+          const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+          const blob = new Blob(audioChunksRef.current, { type: mimeType });
+          await saveAudio(data.id, blob);
+        } catch {}
+      }
       setPhase('saved');
     } else {
       setError('保存失败，请重试');

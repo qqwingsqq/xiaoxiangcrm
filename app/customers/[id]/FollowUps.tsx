@@ -51,6 +51,55 @@ function fmtSize(bytes: number | null) {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
+function AddToCalendarBtn({ text, date }: { text: string; date?: string }) {
+  const [open, setOpen] = useState(false);
+  const today = new Date().toISOString().substring(0, 10);
+  const [evDate, setEvDate] = useState(date || today);
+  const [evTime, setEvTime] = useState('09:00');
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    await fetch('/api/calendar-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: text.substring(0, 60), event_date: evDate, event_time: evTime, description: text }),
+    });
+    setSaving(false);
+    setOpen(false);
+    setDone(true);
+  };
+
+  if (done) return <span style={{ fontSize: '10px', color: '#10b981', flexShrink: 0 }}>✓ 已加入日程</span>;
+
+  if (open) {
+    return (
+      <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+          <input type="date" value={evDate} onChange={e => setEvDate(e.target.value)}
+            style={{ flex: 1, padding: '3px 6px', borderRadius: '5px', fontSize: '11px', background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', outline: 'none' }} />
+          <input type="time" value={evTime} onChange={e => setEvTime(e.target.value)}
+            style={{ width: '76px', padding: '3px 5px', borderRadius: '5px', fontSize: '11px', background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', outline: 'none' }} />
+        </div>
+        <div style={{ display: 'flex', gap: '5px' }}>
+          <button onClick={() => setOpen(false)} style={{ flex: 1, padding: '3px 0', borderRadius: '5px', fontSize: '10px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>取消</button>
+          <button onClick={save} disabled={saving} style={{ flex: 2, padding: '3px 0', borderRadius: '5px', fontSize: '10px', background: '#2563eb', border: 'none', color: 'white', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? '保存中…' : '确认加入'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={() => setOpen(true)}
+      style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '5px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60a5fa', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+      + 加入日程
+    </button>
+  );
+}
+
 function DocumentCard({ doc, onDeleted, onAnalyzed }: {
   doc: DocFile;
   onDeleted: () => void;
@@ -125,12 +174,15 @@ function DocumentCard({ doc, onDeleted, onAnalyzed }: {
           )}
           {keyPoints.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">✨ 重点提取</p>
-              <ul className="space-y-1.5">
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">✨ 重点提取 <span style={{ color: '#64748b', fontWeight: 400 }}>— 可加入日程</span></p>
+              <ul className="space-y-2">
                 {keyPoints.map((pt, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-zinc-300">
-                    <span className="text-blue-400 flex-shrink-0 font-bold">{i + 1}.</span>
-                    <span>{pt}</span>
+                  <li key={i} className="text-xs">
+                    <div className="flex gap-2 items-start">
+                      <span className="text-blue-400 flex-shrink-0 font-bold">{i + 1}.</span>
+                      <span className="text-zinc-300 flex-1">{pt}</span>
+                      <AddToCalendarBtn text={pt} />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -138,16 +190,19 @@ function DocumentCard({ doc, onDeleted, onAnalyzed }: {
           )}
           {docReminders.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">🔔 跟进提醒</p>
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">🔔 跟进提醒 <span style={{ color: '#64748b', fontWeight: 400 }}>— 可加入日程</span></p>
               <ul className="space-y-1.5">
                 {docReminders.map((r, i) => (
-                  <li key={i} className="flex gap-2 text-xs items-start p-2 rounded-lg"
-                    style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}>
-                    <span className="text-amber-400 flex-shrink-0">!</span>
-                    <span className="text-zinc-300 flex-1">{r.content}</span>
-                    {r.remind_date && (
-                      <span className="text-amber-400 flex-shrink-0 text-xs">{r.remind_date}</span>
-                    )}
+                  <li key={i} className="text-xs">
+                    <div className="flex gap-2 items-start p-2 rounded-lg"
+                      style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}>
+                      <span className="text-amber-400 flex-shrink-0">!</span>
+                      <span className="text-zinc-300 flex-1">{r.content}</span>
+                      {r.remind_date && (
+                        <span className="text-amber-400 flex-shrink-0 text-xs mr-1">{r.remind_date}</span>
+                      )}
+                      <AddToCalendarBtn text={r.content} date={r.remind_date} />
+                    </div>
                   </li>
                 ))}
               </ul>
