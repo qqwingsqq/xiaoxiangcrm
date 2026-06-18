@@ -8,8 +8,8 @@
   "theme_color": "#18181b",
   "orientation": "portrait",
   "icons": [
-    { "src": "/logo.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/logo.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/Logo.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/Logo.png", "sizes": "512x512", "type": "image/png" }
   ],
   "shortcuts": [
     {
@@ -17,7 +17,7 @@
       "short_name": "语音记录",
       "description": "立即开始语音跟进记录",
       "url": "/quick-record",
-      "icons": [{ "src": "/logo.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/Logo.png", "sizes": "96x96" }]
     }
   ]
 }

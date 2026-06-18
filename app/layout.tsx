@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <link rel="apple-touch-icon" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/Logo.png" />
       </head>
       <body className="min-h-screen" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
         <PWAInit />
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
               <div className="flex items-center gap-5">
                 <div className="flex items-center gap-2.5">
-                  <img src="/logo.png" alt="小象智能" className="h-8 w-auto" />
+                  <img src="/Logo.png" alt="小象智能" className="h-8 w-auto" />
                   <span className="font-semibold text-white text-sm hidden sm:block">小象智能</span>
                 </div>
                 <NavLinks />
