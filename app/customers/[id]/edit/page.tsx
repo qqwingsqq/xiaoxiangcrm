@@ -10,7 +10,8 @@ export default async function EditCustomerPage({ params }: { params: Promise<{ i
   if (!row) notFound();
   const customer = row as unknown as {
     id: number; name: string; type: string; address: string | null;
-    contact_name: string | null; contact_info: string | null; tags: string;
+    contact_name: string | null; contact_info: string | null;
+    wechat_id: string | null; tags: string;
   };
 
   let tags: string[] = [];
@@ -31,7 +32,7 @@ export default async function EditCustomerPage({ params }: { params: Promise<{ i
           initial={{
             name: customer.name, type: customer.type,
             address: customer.address || '', contact_name: customer.contact_name || '',
-            contact_info: customer.contact_info || '', tags,
+            contact_info: customer.contact_info || '', wechat_id: customer.wechat_id || '', tags,
           }}
           customerId={customer.id}
         />

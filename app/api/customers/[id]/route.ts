@@ -27,7 +27,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
   if (!exists[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
   await db.execute({
-    sql: `UPDATE customers SET name=?, type=?, address=?, contact_name=?, contact_info=?, tags=?,
+    sql: `UPDATE customers SET name=?, type=?, address=?, contact_name=?, contact_info=?, wechat_id=?, tags=?,
           updated_at=datetime('now','localtime') WHERE id=?`,
     args: [
       body.name.trim(),
@@ -35,6 +35,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       body.address?.trim() || null,
       body.contact_name?.trim() || null,
       body.contact_info?.trim() || null,
+      body.wechat_id?.trim() || null,
       JSON.stringify(body.tags || []),
       id,
     ],

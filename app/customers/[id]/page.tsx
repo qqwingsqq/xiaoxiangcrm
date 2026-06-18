@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ensureDb } from '@/lib/db';
 import DeleteButton from './DeleteButton';
 import FollowUps from './FollowUps';
+import WeChatButton from '../WeChatButton';
 
 const TYPE_LABELS: Record<string, string> = {
   dealer: '经销商', terminal: '终端客户', partner: '合作伙伴', potential: '潜在客户',
@@ -33,6 +34,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const customer = row as unknown as {
     id: number; name: string; type: string; address: string | null;
     contact_name: string | null; contact_info: string | null;
+    wechat_id: string | null;
     tags: string; created_at: string; updated_at: string;
   };
 
@@ -75,6 +77,13 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
         <Row label="联系人" value={customer.contact_name} />
         <Row label="联系方式" value={customer.contact_info} />
+        <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>微信号</span>
+          {customer.wechat_id
+            ? <WeChatButton wechatId={customer.wechat_id} />
+            : <span className="text-sm" style={{ color: 'var(--text-muted)' }}>未填写</span>
+          }
+        </div>
         <Row label="地址" value={customer.address} />
         <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>客户标签</span>

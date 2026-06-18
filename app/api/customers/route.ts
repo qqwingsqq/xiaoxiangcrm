@@ -36,13 +36,14 @@ export async function POST(request: NextRequest) {
 
   const db = await ensureDb();
   const result = await db.execute({
-    sql: `INSERT INTO customers (name, type, address, contact_name, contact_info, tags) VALUES (?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO customers (name, type, address, contact_name, contact_info, wechat_id, tags) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.name.trim(),
       body.type,
       body.address?.trim() || null,
       body.contact_name?.trim() || null,
       body.contact_info?.trim() || null,
+      body.wechat_id?.trim() || null,
       JSON.stringify(body.tags || []),
     ],
   });
