@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import VoiceRecordWidget from './VoiceRecordWidget';
+import CalendarWidget from './CalendarWidget';
 import { useDevice } from './DevicePreviewProvider';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -81,7 +82,7 @@ function RelationBars({ data }: { data: { type: string; count: number }[] }) {
             </span>
             <span className="text-xs text-zinc-500">{d.count}家 · {Math.round(d.count / total * 100)}%</span>
           </div>
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#2a2a2e' }}>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-track)' }}>
             <div className="h-full rounded-full" style={{ width: `${d.count / total * 100}%`, background: TYPE_DOT[d.type] }} />
           </div>
         </div>
@@ -235,7 +236,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {reminders.slice(0, 4).map(r => (
-                <div key={r.id} className="flex items-start gap-2.5 px-2 py-2 rounded-xl" style={{ background: '#222225' }}>
+                <div key={r.id} className="flex items-start gap-2.5 px-2 py-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
                   <button onClick={() => markDone(r.id)} className="mt-0.5 w-4 h-4 rounded border border-zinc-600 flex-shrink-0 hover:border-emerald-500 transition-colors" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-zinc-300 leading-relaxed">{r.content}</p>
@@ -268,7 +269,7 @@ export default function DashboardPage() {
           <div className="space-y-2">
             {(data?.recentFollowUps || []).slice(0, 4).map(f => (
               <Link key={f.id} href={`/customers/${f.customer_id || 0}`}
-                className="flex items-start gap-2.5 px-2 py-2 rounded-xl group" style={{ background: '#222225' }}>
+                className="flex items-start gap-2.5 px-2 py-2 rounded-xl group" style={{ background: 'var(--bg-inner)' }}>
                 <div className="w-1 self-stretch rounded-full flex-shrink-0 mt-0.5" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280' }} />
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
@@ -278,6 +279,11 @@ export default function DashboardPage() {
             ))}
             {(data?.recentFollowUps || []).length === 0 && <p className="text-xs text-zinc-600 text-center py-2">暂无跟进记录</p>}
           </div>
+        </div>
+
+        {/* 日历 */}
+        <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <CalendarWidget />
         </div>
 
         {/* 快速录音：横向横幅 */}
@@ -367,7 +373,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-zinc-600">全部完成了</p>
                 </div>
               ) : reminders.map(r => (
-                <div key={r.id} className="flex items-start gap-2.5 p-2 rounded-xl" style={{ background: '#222225' }}>
+                <div key={r.id} className="flex items-start gap-2.5 p-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
                   <button onClick={() => markDone(r.id)} className="mt-0.5 w-4 h-4 rounded border border-zinc-600 flex-shrink-0 hover:border-emerald-500 hover:bg-emerald-500/10 transition-colors" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-zinc-300 leading-relaxed">{r.content}</p>
@@ -402,7 +408,7 @@ export default function DashboardPage() {
             <div className="flex-1 overflow-y-auto space-y-2">
               {(data?.recentFollowUps || []).slice(0, 4).map(f => (
                 <Link key={f.id} href={`/customers/${f.customer_id || 0}`}
-                  className="flex gap-2.5 p-2 rounded-xl hover:bg-zinc-800 transition-colors group block" style={{ background: '#222225' }}>
+                  className="flex gap-2.5 p-2 rounded-xl hover:bg-zinc-800 transition-colors group block" style={{ background: 'var(--bg-inner)' }}>
                   <div className="w-1 rounded-full flex-shrink-0 mt-0.5" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280', alignSelf: 'stretch' }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
@@ -415,7 +421,12 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 行4：语音记录（全宽） */}
+        {/* 行4：日历 */}
+        <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <CalendarWidget />
+        </div>
+
+        {/* 行5：语音记录（全宽） */}
         <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <VoiceRecordWidget />
         </div>
@@ -481,7 +492,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-zinc-500">暂无待办事项</p>
               </div>
             ) : reminders.map(r => (
-              <div key={r.id} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#222225' }}>
+              <div key={r.id} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
                 <button onClick={() => markDone(r.id)} className="mt-0.5 w-4 h-4 rounded border border-zinc-600 flex-shrink-0 hover:border-emerald-500 hover:bg-emerald-500/10 transition-colors" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-zinc-300 leading-relaxed">{r.content}</p>
@@ -516,7 +527,7 @@ export default function DashboardPage() {
           <div className="flex-1 overflow-y-auto space-y-2">
             {(data?.recentFollowUps || []).map(f => (
               <Link key={f.id} href={`/customers/${f.customer_id || 0}`}
-                className="flex gap-3 p-3 rounded-xl hover:bg-zinc-800 transition-colors group block" style={{ background: '#222225' }}>
+                className="flex gap-3 p-3 rounded-xl hover:bg-zinc-800 transition-colors group block" style={{ background: 'var(--bg-inner)' }}>
                 <div className="w-1 rounded-full flex-shrink-0" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280', alignSelf: 'stretch' }} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
@@ -530,7 +541,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 行4：语音记录（全宽） */}
+      {/* 行4：日历 */}
+      <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <CalendarWidget />
+      </div>
+
+      {/* 行5：语音记录（全宽） */}
       <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <VoiceRecordWidget />
       </div>

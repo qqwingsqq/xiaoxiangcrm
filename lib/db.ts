@@ -76,6 +76,15 @@ export async function ensureDb(): Promise<Client> {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
       )`,
+      `CREATE TABLE IF NOT EXISTS calendar_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        event_date TEXT NOT NULL,
+        event_time TEXT,
+        description TEXT,
+        is_done INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+      )`,
     ], 'write');
     _initDone = true;
   }
