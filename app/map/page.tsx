@@ -13,12 +13,15 @@ interface Customer {
   type: string;
   address: string | null;
   contact_name: string | null;
+  map_lat: number | null;
+  map_lng: number | null;
 }
 
 interface GeoItem {
   customer: Customer;
   position: [number, number] | null;
   failed: boolean;
+  manual: boolean;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -39,16 +42,17 @@ function loadScript(key: string): Promise<void> {
   });
 }
 
-function buildInfoContent(c: Customer, color: string, label: string) {
+function buildInfoContent(c: Customer, color: string, label: string, manual: boolean) {
   return `
     <div style="padding:10px 12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:10px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:-apple-system,'PingFang SC',sans-serif">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
         <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;display:block"></span>
         <b style="font-size:13px;color:#f4f4f5">${c.name}</b>
+        ${manual ? '<span style="font-size:10px;color:#71717a;margin-left:2px">手动</span>' : ''}
       </div>
       <p style="margin:0 0 3px;font-size:11px;color:#71717a">${label}</p>
       ${c.contact_name ? `<p style="margin:0 0 3px;font-size:11px;color:#a1a1aa">👤 ${c.contact_name}</p>` : ''}
-      <p style="margin:0 0 8px;font-size:10px;color:#52525b">📍 ${c.address || ''}</p>
+      ${c.address ? `<p style="margin:0 0 8px;font-size:10px;color:#52525b">📍 ${c.address}</p>` : '<p style="margin:0 0 8px;font-size:10px;color:#52525b">📍 手动标记位置</p>'}
       <a href="/customers/${c.id}" style="font-size:12px;color:#3b82f6;text-decoration:none">查看详情 →</a>
     </div>
   `;
@@ -60,7 +64,9 @@ export default function MapPage() {
   const mapInst = useRef<any>(null);
   const markersRef = useRef<Map<number, any>>(new Map());
   const infoWinRef = useRef<any>(null);
+  const markingModeRef = useRef(false);
 
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [apiKey, setApiKey] = useState('');
   const [keyInput, setKeyInput] = useState('');
@@ -72,17 +78,73 @@ export default function MapPage() {
   const [geoItems, setGeoItems] = useState<GeoItem[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [listSearch, setListSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
+
+  // Manual marking state
+  const [markingMode, setMarkingMode] = useState(false);
+  const [markingPos, setMarkingPos] = useState<[number, number] | null>(null);
+  const [markingCustomerId, setMarkingCustomerId] = useState<number>(0);
+
+  // Auto-fly target from URL ?id=X
+  const targetIdRef = useRef<number | null>(null);
 
   const fetchCustomers = () => {
     fetch('/api/customers')
       .then(r => r.json())
-      .then((data: Customer[]) => setCustomers(data.filter(c => c.address?.trim())));
+      .then((data: Customer[]) => {
+        setAllCustomers(data);
+        setCustomers(data.filter(c => (c.map_lat && c.map_lng) || c.address?.trim()));
+      });
   };
 
   useEffect(() => {
     setApiKey(localStorage.getItem('crm-amap-key') || '');
     fetchCustomers();
+    // Read ?id=X from URL for auto-fly
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (id) targetIdRef.current = Number(id);
   }, []);
+
+  // Resize map when device changes
+  useEffect(() => {
+    if (mapInst.current) {
+      setTimeout(() => mapInst.current?.resize?.(), 150);
+    }
+  }, [device]);
+
+  // Sync marking mode state to ref
+  useEffect(() => {
+    markingModeRef.current = markingMode;
+  }, [markingMode]);
+
+  const createMarker = (
+    map: any, infoWin: any, c: Customer,
+    lng: number, lat: number, manual: boolean
+  ) => {
+    const color = TYPE_COLORS[c.type] || '#6b7280';
+    const label = TYPE_LABELS[c.type] || c.type;
+
+    const marker = new window.AMap.Marker({
+      position: [lng, lat],
+      content: manual
+        ? `<div style="width:14px;height:14px;background:${color};border:2.5px solid rgba(255,255,255,0.9);border-radius:3px;box-shadow:0 0 8px ${color}80;cursor:pointer;transform:rotate(45deg)"></div>`
+        : `<div style="width:13px;height:13px;background:${color};border:2.5px solid rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 8px ${color}80;cursor:pointer"></div>`,
+      offset: manual ? new window.AMap.Pixel(-7, -7) : new window.AMap.Pixel(-6, -6),
+      title: c.name,
+      zIndex: 100,
+    });
+
+    markersRef.current.set(c.id, marker);
+
+    marker.on('click', () => {
+      if (markingModeRef.current) return;
+      setActiveId(c.id);
+      infoWin.setContent(buildInfoContent(c, color, label, manual));
+      infoWin.open(map, [lng, lat]);
+    });
+
+    map.add(marker);
+  };
 
   useEffect(() => {
     if (!apiKey || !mapRef.current) return;
@@ -118,6 +180,14 @@ export default function MapPage() {
         mapStyle: isLight ? 'amap://styles/normal' : 'amap://styles/dark',
       });
       mapInst.current = map;
+
+      // Map click handler for manual marking mode
+      map.on('click', (e: any) => {
+        if (markingModeRef.current) {
+          setMarkingPos([e.lnglat.lng, e.lnglat.lat]);
+        }
+      });
+
       setLoading(false);
       setMapBuilt(true);
 
@@ -127,13 +197,57 @@ export default function MapPage() {
 
       const toShow = filter === 'all' ? customers : customers.filter(c => c.type === filter);
       if (!cancelled) {
-        setGeoItems(toShow.map(c => ({ customer: c, position: null, failed: false })));
+        setGeoItems(toShow.map(c => ({ customer: c, position: null, failed: false, manual: false })));
         setProgress({ done: 0, total: toShow.length });
       }
 
       let doneCount = 0;
+
+      const tryAutoFly = (id: number, lng: number, lat: number) => {
+        if (targetIdRef.current === id && mapInst.current) {
+          setTimeout(() => {
+            mapInst.current?.setZoom(15);
+            mapInst.current?.panTo([lng, lat]);
+            setActiveId(id);
+            const customer = toShow.find(c => c.id === id);
+            if (customer && infoWinRef.current) {
+              const color = TYPE_COLORS[customer.type] || '#6b7280';
+              const label = TYPE_LABELS[customer.type] || customer.type;
+              infoWinRef.current.setContent(buildInfoContent(customer, color, label, !!customer.map_lat));
+              infoWinRef.current.open(mapInst.current, [lng, lat]);
+            }
+            targetIdRef.current = null;
+          }, 300);
+        }
+      };
+
       toShow.forEach(c => {
-        if (!c.address || cancelled) return;
+        if (cancelled) return;
+
+        // Priority 1: use manual map_lat/map_lng
+        if (c.map_lat && c.map_lng) {
+          const lng = c.map_lng;
+          const lat = c.map_lat;
+          doneCount++;
+          setProgress({ done: doneCount, total: toShow.length });
+          setGeoItems(prev => prev.map(item =>
+            item.customer.id === c.id ? { ...item, position: [lng, lat], manual: true } : item
+          ));
+          createMarker(map, infoWin, c, lng, lat, true);
+          tryAutoFly(c.id, lng, lat);
+          return;
+        }
+
+        // Priority 2: geocode from address
+        if (!c.address) {
+          doneCount++;
+          setProgress({ done: doneCount, total: toShow.length });
+          setGeoItems(prev => prev.map(item =>
+            item.customer.id === c.id ? { ...item, failed: true } : item
+          ));
+          return;
+        }
+
         geocoder.getLocation(c.address, (status: string, result: any) => {
           if (cancelled) return;
           doneCount++;
@@ -147,30 +261,11 @@ export default function MapPage() {
           }
 
           const { lng, lat } = result.geocodes[0].location;
-          const color = TYPE_COLORS[c.type] || '#6b7280';
-          const label = TYPE_LABELS[c.type] || c.type;
-
           setGeoItems(prev => prev.map(item =>
             item.customer.id === c.id ? { ...item, position: [lng, lat] as [number, number] } : item
           ));
-
-          const marker = new window.AMap.Marker({
-            position: [lng, lat],
-            content: `<div style="width:13px;height:13px;background:${color};border:2.5px solid rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 8px ${color}80;cursor:pointer"></div>`,
-            offset: new window.AMap.Pixel(-6, -6),
-            title: c.name,
-            zIndex: 100,
-          });
-
-          markersRef.current.set(c.id, marker);
-
-          marker.on('click', () => {
-            setActiveId(c.id);
-            infoWin.setContent(buildInfoContent(c, color, label));
-            infoWin.open(map, [lng, lat]);
-          });
-
-          map.add(marker);
+          createMarker(map, infoWin, c, lng, lat, false);
+          tryAutoFly(c.id, lng, lat);
         });
       });
     };
@@ -191,15 +286,49 @@ export default function MapPage() {
     if (!item.position || !mapInst.current) return;
     const [lng, lat] = item.position;
     setActiveId(item.customer.id);
+    setActiveTab('map');
     mapInst.current.setZoom(15);
     mapInst.current.panTo([lng, lat]);
     if (infoWinRef.current) {
       const c = item.customer;
       const color = TYPE_COLORS[c.type] || '#6b7280';
       const label = TYPE_LABELS[c.type] || c.type;
-      infoWinRef.current.setContent(buildInfoContent(c, color, label));
+      infoWinRef.current.setContent(buildInfoContent(c, color, label, item.manual));
       infoWinRef.current.open(mapInst.current, [lng, lat]);
     }
+    // Resize after tab switch
+    setTimeout(() => mapInst.current?.resize?.(), 50);
+  };
+
+  const toggleMarkingMode = () => {
+    const next = !markingMode;
+    setMarkingMode(next);
+    markingModeRef.current = next;
+    if (!next) { setMarkingPos(null); setMarkingCustomerId(0); }
+  };
+
+  const confirmManualMark = async () => {
+    if (!markingPos || !markingCustomerId) return;
+    const [lng, lat] = markingPos;
+    await fetch(`/api/customers/${markingCustomerId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ map_lat: lat, map_lng: lng }),
+    });
+    setMarkingPos(null);
+    setMarkingCustomerId(0);
+    setMarkingMode(false);
+    markingModeRef.current = false;
+    fetchCustomers();
+  };
+
+  const clearManualMark = async (customerId: number) => {
+    await fetch(`/api/customers/${customerId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ map_lat: null, map_lng: null }),
+    });
+    fetchCustomers();
   };
 
   const saveKey = () => {
@@ -210,15 +339,20 @@ export default function MapPage() {
     setKeyInput('');
   };
 
-  const mapH = device === 'mobile' ? 350 : device === 'tablet' ? 500 : 600;
-  const listH = device === 'mobile' ? 200 : mapH;
   const isMobile = device === 'mobile';
+  const mapH = isMobile ? 260 : device === 'tablet' ? 480 : 580;
+  const listH = isMobile ? 360 : mapH;
 
   const filteredGeoItems = geoItems.filter(item =>
     !listSearch ||
     item.customer.name.includes(listSearch) ||
     (item.customer.address || '').includes(listSearch)
   );
+
+  const typeCounts = customers.reduce((acc, c) => {
+    acc[c.type] = (acc[c.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   // ── Setup screen ─────────────────────────────────────
   if (!apiKey) {
@@ -231,18 +365,12 @@ export default function MapPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
           </div>
-          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>使用高德地图需要 API Key</h2>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>免费注册，每天 200 万次调用</p>
+          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>使用客户地图需要 API Key</h2>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>免费注册高德地图，每天 200 万次调用</p>
         </div>
-
         <div className="rounded-2xl p-5 mb-4 space-y-2.5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <p className="text-xs font-semibold mb-3 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>申请步骤</p>
-          {[
-            '打开 lbs.amap.com 注册/登录',
-            '进入"控制台" → "应用管理" → "创建新应用"',
-            '添加 Key，服务平台选 Web端（JS API）',
-            '复制 Key 粘贴到下方',
-          ].map((step, i) => (
+          {['打开 lbs.amap.com 注册/登录', '进入"控制台" → "应用管理" → "创建新应用"', '添加 Key，服务平台选 Web端（JS API）', '复制 Key 粘贴到下方'].map((step, i) => (
             <div key={i} className="flex items-start gap-3">
               <span className="w-5 h-5 rounded-full text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-semibold"
                 style={{ background: 'var(--accent)', color: '#fff' }}>{i + 1}</span>
@@ -250,24 +378,14 @@ export default function MapPage() {
             </div>
           ))}
         </div>
-
         <div className="space-y-3">
-          <input
-            value={keyInput}
-            onChange={e => setKeyInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && saveKey()}
+          <input value={keyInput} onChange={e => setKeyInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveKey()}
             placeholder="粘贴高德 JS API Key"
             className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-          />
-          <button
-            onClick={saveKey}
-            disabled={!keyInput.trim()}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+          <button onClick={saveKey} disabled={!keyInput.trim()}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-opacity disabled:opacity-40"
-            style={{ background: 'var(--accent)' }}
-          >
-            保存并加载地图
-          </button>
+            style={{ background: 'var(--accent)' }}>保存并加载地图</button>
         </div>
         <p className="text-xs text-center mt-3" style={{ color: 'var(--text-muted)' }}>Key 仅保存在本设备，不上传服务器</p>
       </div>
@@ -275,24 +393,32 @@ export default function MapPage() {
   }
 
   // ── Map screen ───────────────────────────────────────
-  const typeCounts = customers.reduce((acc, c) => {
-    acc[c.type] = (acc[c.type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
   return (
     <div className="space-y-3">
-      {/* Header + filters */}
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <div>
             <h1 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>客户地图</h1>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {customers.length} 个客户有地址
-              {progress.total > 0 && progress.done < progress.total
-                ? ` · 标注中 ${progress.done}/${progress.total}` : ''}
+              {customers.length} 个客户
+              {progress.total > 0 && progress.done < progress.total ? ` · 标注中 ${progress.done}/${progress.total}` : ''}
             </p>
           </div>
+          {/* Manual marking toggle */}
+          <button onClick={toggleMarkingMode}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{
+              background: markingMode ? 'rgba(239,68,68,0.15)' : 'var(--bg-card)',
+              border: `1px solid ${markingMode ? 'rgba(239,68,68,0.4)' : 'var(--border)'}`,
+              color: markingMode ? '#f87171' : 'var(--text-secondary)',
+            }}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            {markingMode ? '取消标记' : '手动标记'}
+          </button>
           <button onClick={fetchCustomers}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors"
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
@@ -302,6 +428,7 @@ export default function MapPage() {
             刷新
           </button>
         </div>
+        {/* Type filter */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {[{ key: 'all', label: '全部', color: 'var(--accent)' },
             ...Object.entries(TYPE_LABELS).map(([k, l]) => ({ key: k, label: l, color: TYPE_COLORS[k] }))
@@ -313,19 +440,56 @@ export default function MapPage() {
                 border: `1px solid ${filter === opt.key ? opt.color + '55' : 'var(--border)'}`,
                 color: filter === opt.key ? opt.color : 'var(--text-secondary)',
               }}>
-              {opt.label}
-              {opt.key !== 'all' && typeCounts[opt.key] ? ` ${typeCounts[opt.key]}` : ''}
+              {opt.label}{opt.key !== 'all' && typeCounts[opt.key] ? ` ${typeCounts[opt.key]}` : ''}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Map + List */}
+      {/* Marking mode instruction */}
+      {markingMode && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs"
+          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          手动标记模式：点击地图任意位置，然后选择要绑定的客户
+        </div>
+      )}
+
+      {/* Mobile tab toggle */}
+      {isMobile && (
+        <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          {(['map', 'list'] as const).map(tab => (
+            <button key={tab} onClick={() => {
+              setActiveTab(tab);
+              if (tab === 'map') setTimeout(() => mapInst.current?.resize?.(), 60);
+            }}
+              className="flex-1 py-2 text-xs font-medium transition-colors"
+              style={{
+                background: activeTab === tab ? 'var(--accent)' : 'var(--bg-card)',
+                color: activeTab === tab ? '#fff' : 'var(--text-muted)',
+              }}>
+              {tab === 'map' ? '地图' : `列表 (${filteredGeoItems.length})`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Map + List layout */}
       <div className={`flex gap-3 ${isMobile ? 'flex-col' : 'flex-row items-start'}`}>
 
         {/* Map */}
-        <div className="relative rounded-2xl overflow-hidden flex-1"
-          style={{ height: mapH, border: '1px solid var(--border)', minWidth: 0 }}>
+        <div
+          className="relative rounded-2xl overflow-hidden flex-1"
+          style={{
+            height: mapH,
+            border: '1px solid var(--border)',
+            display: isMobile && activeTab === 'list' ? 'none' : 'block',
+            cursor: markingMode ? 'crosshair' : 'default',
+            minWidth: 0,
+          }}>
           <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
           {loading && (
@@ -339,11 +503,9 @@ export default function MapPage() {
           )}
 
           {!loading && loadError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4"
-              style={{ background: 'var(--bg-base)' }}>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4" style={{ background: 'var(--bg-base)' }}>
               <p className="text-sm text-red-400 text-center">{loadError}</p>
-              <button
-                onClick={() => { localStorage.removeItem('crm-amap-key'); setApiKey(''); }}
+              <button onClick={() => { localStorage.removeItem('crm-amap-key'); setApiKey(''); }}
                 className="text-xs px-4 py-2 rounded-lg"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
                 重新设置 Key
@@ -354,21 +516,21 @@ export default function MapPage() {
           {!loading && mapBuilt && customers.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="px-4 py-2 rounded-xl text-xs" style={{ background: 'rgba(0,0,0,0.6)', color: '#a1a1aa' }}>
-                暂无客户地址，请先填写客户地址
+                暂无客户地址，请先在客户资料中填写地址或手动标记
               </div>
             </div>
           )}
         </div>
 
-        {/* Customer list sidebar */}
+        {/* Customer list */}
         <div className="flex flex-col rounded-2xl overflow-hidden flex-shrink-0"
           style={{
-            width: isMobile ? '100%' : '256px',
+            width: isMobile ? '100%' : '248px',
             height: listH,
             border: '1px solid var(--border)',
             background: 'var(--bg-card)',
+            display: isMobile && activeTab === 'map' ? 'none' : 'flex',
           }}>
-          {/* List header */}
           <div className="flex items-center justify-between px-3 py-2.5 flex-shrink-0"
             style={{ borderBottom: '1px solid var(--border)' }}>
             <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>客户列表</span>
@@ -376,25 +538,17 @@ export default function MapPage() {
               {filteredGeoItems.filter(i => i.position).length}/{filteredGeoItems.length} 已标注
             </span>
           </div>
-
-          {/* Search */}
-          <div className="px-2 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
             <div className="relative">
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
                 style={{ color: 'var(--text-muted)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <input
-                value={listSearch}
-                onChange={e => setListSearch(e.target.value)}
-                placeholder="搜索客户…"
+              <input value={listSearch} onChange={e => setListSearch(e.target.value)} placeholder="搜索客户…"
                 className="w-full pl-8 pr-2 py-1.5 rounded-lg text-xs outline-none"
-                style={{ background: 'var(--bg-inner)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-              />
+                style={{ background: 'var(--bg-inner)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
             </div>
           </div>
-
-          {/* List items */}
           <div className="flex-1 overflow-y-auto">
             {filteredGeoItems.length === 0 && (
               <div className="flex items-center justify-center h-full px-4">
@@ -408,41 +562,49 @@ export default function MapPage() {
               const isActive = activeId === item.customer.id;
               const canFly = !!item.position;
               return (
-                <button
-                  key={item.customer.id}
-                  onClick={() => flyTo(item)}
-                  disabled={!canFly}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors disabled:cursor-default"
+                <div key={item.customer.id}
+                  className="flex items-center gap-2 px-3 transition-colors"
                   style={{
                     background: isActive ? `${color}18` : 'transparent',
                     borderBottom: '1px solid var(--border)',
                     borderLeft: isActive ? `2px solid ${color}` : '2px solid transparent',
-                  }}
-                >
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: canFly ? color : 'var(--border)' }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate"
-                      style={{ color: canFly ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {item.customer.name}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                      {TYPE_LABELS[item.customer.type] || item.customer.type}
-                    </p>
-                  </div>
-                  {item.failed ? (
-                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>未找到</span>
-                  ) : !item.position ? (
-                    <div className="w-3 h-3 border border-zinc-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                  ) : (
-                    <svg className="w-3.5 h-3.5 flex-shrink-0" style={{ color: isActive ? color : 'var(--text-muted)' }}
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                  }}>
+                  <button onClick={() => flyTo(item)} disabled={!canFly}
+                    className="flex items-center gap-2 flex-1 py-2.5 text-left disabled:cursor-default min-w-0">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: canFly ? color : 'var(--border)', borderRadius: item.manual ? '2px' : '50%', transform: item.manual ? 'rotate(45deg)' : 'none' }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate"
+                        style={{ color: canFly ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                        {item.customer.name}
+                        {item.manual && <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>手动</span>}
+                      </p>
+                      <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                        {TYPE_LABELS[item.customer.type] || item.customer.type}
+                      </p>
+                    </div>
+                    {item.failed ? (
+                      <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>未找到</span>
+                    ) : !item.position ? (
+                      <div className="w-3 h-3 border border-zinc-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" style={{ color: isActive ? color : 'var(--text-muted)' }}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </button>
+                  {/* Clear manual mark button */}
+                  {item.manual && (
+                    <button onClick={() => clearManualMark(item.customer.id)}
+                      className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center transition-colors hover:bg-red-900/30"
+                      style={{ color: 'var(--text-muted)' }} title="清除手动标记">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -452,6 +614,14 @@ export default function MapPage() {
       {/* Legend + key */}
       <div className="flex items-center justify-between flex-wrap gap-2 px-0.5">
         <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full border border-white/40" style={{ background: '#6b7280' }} />
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>自动标注</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 border border-white/40" style={{ background: '#6b7280', transform: 'rotate(45deg)' }} />
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>手动标记</span>
+          </div>
           {Object.entries(TYPE_LABELS).map(([k, l]) => (
             <div key={k} className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full border border-white/40" style={{ background: TYPE_COLORS[k] }} />
@@ -459,13 +629,47 @@ export default function MapPage() {
             </div>
           ))}
         </div>
-        <button
-          onClick={() => { localStorage.removeItem('crm-amap-key'); setApiKey(''); }}
-          className="text-xs"
-          style={{ color: 'var(--text-muted)' }}>
-          更换 Key
-        </button>
+        <button onClick={() => { localStorage.removeItem('crm-amap-key'); setApiKey(''); }}
+          className="text-xs" style={{ color: 'var(--text-muted)' }}>更换 Key</button>
       </div>
+
+      {/* Manual marking dialog */}
+      {markingPos && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)' }}>
+          <div className="w-full max-w-sm rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <svg className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>手动标记位置</h3>
+            </div>
+            <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+              坐标：{markingPos[1].toFixed(5)}, {markingPos[0].toFixed(5)}
+            </p>
+            <select value={markingCustomerId} onChange={e => setMarkingCustomerId(Number(e.target.value))}
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none mb-4"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+              <option value={0}>— 请选择要标记的客户 —</option>
+              {allCustomers.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name}（{TYPE_LABELS[c.type] || c.type}）
+                  {c.map_lat ? ' [已有标记]' : ''}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button onClick={() => { setMarkingPos(null); setMarkingCustomerId(0); }}
+                className="flex-1 py-2.5 rounded-xl text-sm"
+                style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>取消</button>
+              <button onClick={confirmManualMark} disabled={!markingCustomerId}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-40"
+                style={{ background: 'var(--accent)' }}>确认标记</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

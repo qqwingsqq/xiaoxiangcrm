@@ -86,10 +86,10 @@ export async function ensureDb(): Promise<Client> {
         created_at TEXT DEFAULT (datetime('now', 'localtime'))
       )`,
     ], 'write');
-    // Migration: add wechat_id column to existing customers tables
-    try {
-      await db.execute('ALTER TABLE customers ADD COLUMN wechat_id TEXT');
-    } catch (_) { /* column already exists */ }
+    // Migrations
+    try { await db.execute('ALTER TABLE customers ADD COLUMN wechat_id TEXT'); } catch (_) {}
+    try { await db.execute('ALTER TABLE customers ADD COLUMN map_lat REAL'); } catch (_) {}
+    try { await db.execute('ALTER TABLE customers ADD COLUMN map_lng REAL'); } catch (_) {}
     _initDone = true;
   }
   return db;
@@ -115,6 +115,8 @@ export interface Customer {
   contact_name: string | null;
   contact_info: string | null;
   wechat_id: string | null;
+  map_lat: number | null;
+  map_lng: number | null;
   tags: string;
   created_at: string;
   updated_at: string;

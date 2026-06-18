@@ -45,6 +45,26 @@ export async function PUT(request: NextRequest, { params }: Params) {
   return NextResponse.json(rows[0]);
 }
 
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const { id } = await params;
+  const body = await request.json();
+  const db = await ensureDb();
+  const { rows: exists } = await db.execute({ sql: 'SELECT id FROM customers WHERE id = ?', args: [id] });
+  if (!exists[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+
+  const updates: string[] = [];
+  const args: (number | null)[] = [];
+  if ('map_lat' in body) { updates.push('map_lat=?'); args.push(body.map_lat ?? null); }
+  if ('map_lng' in body) { updates.push('map_lng=?'); args.push(body.map_lng ?? null); }
+  if (!updates.length) return NextResponse.json({ error: '无更新字段' }, { status: 400 });
+
+  await db.execute({
+    sql: `UPDATE customers SET ${updates.join(',')}, updated_at=datetime('now','localtime') WHERE id=?`,
+    args: [...args, id],
+  });
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   const db = await ensureDb();
