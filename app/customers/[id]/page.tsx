@@ -84,7 +84,29 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             : <span className="text-sm" style={{ color: 'var(--text-muted)' }}>未填写</span>
           }
         </div>
-        <Row label="地址" value={customer.address} />
+        <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>地址</span>
+          {customer.address ? (
+            <div className="flex items-start gap-2 flex-wrap">
+              <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{customer.address}</span>
+              <a
+                href={`https://uri.amap.com/search?keyword=${encodeURIComponent(customer.address)}&src=xiaoxiangcrm`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-md flex-shrink-0 transition-colors"
+                style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60a5fa' }}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                高德地图
+              </a>
+            </div>
+          ) : (
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>未填写</span>
+          )}
+        </div>
         <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>客户标签</span>
           <div className="flex flex-wrap gap-1.5">
