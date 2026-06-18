@@ -39,7 +39,12 @@ function loadScript(key: string, secCode?: string): Promise<void> {
   });
 }
 
-function buildInfoContent(c: Customer, color: string, label: string, manual: boolean) {
+function buildInfoContent(c: Customer, color: string, label: string, manual: boolean, pos?: [number, number]) {
+  const navUrl = pos
+    ? `https://uri.amap.com/navigation?to=${pos[0]},${pos[1]},${encodeURIComponent(c.name)}&mode=car&src=xiaoxiangcrm`
+    : c.address
+    ? `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(c.name)}&toadd=${encodeURIComponent(c.address)}&mode=car&src=xiaoxiangcrm`
+    : null;
   return `
     <div style="padding:10px 12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:10px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:-apple-system,'PingFang SC',sans-serif">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
@@ -50,7 +55,10 @@ function buildInfoContent(c: Customer, color: string, label: string, manual: boo
       <p style="margin:0 0 3px;font-size:11px;color:#71717a">${label}</p>
       ${c.contact_name ? `<p style="margin:0 0 3px;font-size:11px;color:#a1a1aa">👤 ${c.contact_name}</p>` : ''}
       <p style="margin:0 0 8px;font-size:10px;color:#52525b">📍 ${c.address || '手动标记位置'}</p>
-      <a href="/customers/${c.id}" style="font-size:12px;color:#3b82f6;text-decoration:none">查看详情 →</a>
+      <div style="display:flex;gap:6px">
+        <a href="/customers/${c.id}" style="flex:1;text-align:center;font-size:11px;color:#60a5fa;text-decoration:none;padding:4px 6px;border:1px solid rgba(59,130,246,0.3);border-radius:6px">查看详情</a>
+        ${navUrl ? `<a href="${navUrl}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center;font-size:11px;color:#34d399;text-decoration:none;padding:4px 6px;border:1px solid rgba(52,211,153,0.3);border-radius:6px">去这里</a>` : ''}
+      </div>
     </div>
   `;
 }
@@ -133,11 +141,11 @@ export default function MapPage() {
     setTimeout(() => {
       if (!mapInst.current) return;
       mapInst.current.resize();
-      mapInst.current.setZoomAndCenter(15, [lng, lat]);
+      mapInst.current.setZoomAndCenter(15, [lng, lat], true); // immediately=true
       setActiveId(item.customer.id);
       if (infoWinRef.current) {
         const c = item.customer;
-        infoWinRef.current.setContent(buildInfoContent(c, TYPE_COLORS[c.type] || '#6b7280', TYPE_LABELS[c.type] || c.type, item.manual));
+        infoWinRef.current.setContent(buildInfoContent(c, TYPE_COLORS[c.type] || '#6b7280', TYPE_LABELS[c.type] || c.type, item.manual, item.position!));
         infoWinRef.current.open(mapInst.current, [lng, lat]);
       }
     }, 300);
@@ -178,7 +186,7 @@ export default function MapPage() {
     marker.on('click', () => {
       if (markingModeRef.current) return;
       setActiveId(c.id);
-      infoWin.setContent(buildInfoContent(c, color, label, manual));
+      infoWin.setContent(buildInfoContent(c, color, label, manual, [lng, lat]));
       infoWin.open(map, [lng, lat]);
     });
     map.add(marker);
@@ -307,17 +315,23 @@ export default function MapPage() {
   const flyTo = (item: GeoItem) => {
     if (!item.position || !mapInst.current) return;
     const [lng, lat] = item.position;
+    const map = mapInst.current;
     setActiveId(item.customer.id);
     setActiveTab('map');
-    setTimeout(() => {
-      mapInst.current?.resize?.();
-      mapInst.current?.setZoomAndCenter(15, [lng, lat]);
+    const doFly = () => {
+      map.setZoomAndCenter(15, [lng, lat], true); // immediately=true: no animation conflict
       if (infoWinRef.current) {
         const c = item.customer;
-        infoWinRef.current.setContent(buildInfoContent(c, TYPE_COLORS[c.type] || '#6b7280', TYPE_LABELS[c.type] || c.type, item.manual));
-        infoWinRef.current.open(mapInst.current, [lng, lat]);
+        infoWinRef.current.setContent(buildInfoContent(c, TYPE_COLORS[c.type] || '#6b7280', TYPE_LABELS[c.type] || c.type, item.manual, item.position!));
+        infoWinRef.current.open(map, [lng, lat]);
       }
-    }, 60);
+    };
+    if (device === 'mobile') {
+      // Mobile: wait for tab-switch to make map visible before resize+fly
+      setTimeout(() => { map.resize(); doFly(); }, 120);
+    } else {
+      doFly();
+    }
   };
 
   const toggleMarkingMode = () => {
@@ -602,44 +616,60 @@ export default function MapPage() {
               const dist = myLocation && item.position
                 ? haversine(myLocation[0], myLocation[1], item.position[0], item.position[1])
                 : null;
+              const itemNavUrl = item.position
+                ? `https://uri.amap.com/navigation?to=${item.position[0]},${item.position[1]},${encodeURIComponent(item.customer.name)}&mode=car&src=xiaoxiangcrm`
+                : item.customer.address
+                ? `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(item.customer.name)}&toadd=${encodeURIComponent(item.customer.address)}&mode=car&src=xiaoxiangcrm`
+                : null;
               return (
                 <div key={item.customer.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '12px', paddingRight: '8px',
                   background: isActive ? `${color}18` : 'transparent',
                   borderBottom: '1px solid var(--border)',
                   borderLeft: `2px solid ${isActive ? color : 'transparent'}`,
                 }}>
-                  <button onClick={() => flyTo(item)} disabled={!canFly}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingTop: '9px', paddingBottom: '9px', background: 'none', border: 'none', cursor: canFly ? 'pointer' : 'default', textAlign: 'left', minWidth: 0 }}>
-                    <div style={{ width: '8px', height: '8px', flexShrink: 0, background: canFly ? color : 'var(--border)', borderRadius: item.manual ? '2px' : '50%', transform: item.manual ? 'rotate(45deg)' : 'none' }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: canFly ? 'var(--text-primary)' : 'var(--text-muted)', marginBottom: '1px' }}>
-                        {item.customer.name}
-                        {item.manual && <span style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--text-muted)' }}>手动</span>}
-                      </p>
-                      <p style={{ fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                        {TYPE_LABELS[item.customer.type] || item.customer.type}
-                        {dist !== null && <span style={{ marginLeft: '6px', color: '#60a5fa' }}>{formatDist(dist)}</span>}
-                      </p>
-                    </div>
-                    {item.failed ? (
-                      <span style={{ fontSize: '11px', flexShrink: 0, color: 'var(--text-muted)' }}>未找到</span>
-                    ) : !item.position ? (
-                      <div style={{ width: '12px', height: '12px', flexShrink: 0, border: '2px solid #52525b', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                    ) : (
-                      <svg style={{ width: '14px', height: '14px', flexShrink: 0, color: isActive ? color : 'var(--text-muted)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    )}
-                  </button>
-                  {item.manual && (
-                    <button onClick={() => clearManualMark(item.customer.id)} title="清除手动标记"
-                      style={{ flexShrink: 0, width: '20px', height: '20px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                      <svg style={{ width: '13px', height: '13px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                  {/* Main row: click to fly */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '12px', paddingRight: '8px' }}>
+                    <button onClick={() => flyTo(item)} disabled={!canFly}
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingTop: '8px', paddingBottom: '3px', background: 'none', border: 'none', cursor: canFly ? 'pointer' : 'default', textAlign: 'left', minWidth: 0 }}>
+                      <div style={{ width: '8px', height: '8px', flexShrink: 0, background: canFly ? color : 'var(--border)', borderRadius: item.manual ? '2px' : '50%', transform: item.manual ? 'rotate(45deg)' : 'none' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: canFly ? 'var(--text-primary)' : 'var(--text-muted)', marginBottom: '1px' }}>
+                          {item.customer.name}
+                          {item.manual && <span style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--text-muted)' }}>手动</span>}
+                        </p>
+                        <p style={{ fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
+                          {TYPE_LABELS[item.customer.type] || item.customer.type}
+                          {dist !== null && <span style={{ marginLeft: '6px', color: '#60a5fa' }}>{formatDist(dist)}</span>}
+                        </p>
+                      </div>
+                      {item.failed ? (
+                        <span style={{ fontSize: '11px', flexShrink: 0, color: 'var(--text-muted)' }}>未找到</span>
+                      ) : !item.position ? (
+                        <div style={{ width: '12px', height: '12px', flexShrink: 0, border: '2px solid #52525b', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                      ) : null}
                     </button>
-                  )}
+                    {item.manual && (
+                      <button onClick={() => clearManualMark(item.customer.id)} title="清除手动标记"
+                        style={{ flexShrink: 0, width: '20px', height: '20px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                        <svg style={{ width: '13px', height: '13px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: '5px', paddingLeft: '28px', paddingRight: '8px', paddingBottom: '7px' }}>
+                    <a href={`/customers/${item.customer.id}`}
+                       style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '5px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', color: '#60a5fa', textDecoration: 'none' }}>
+                      查看详情
+                    </a>
+                    {itemNavUrl && (
+                      <a href={itemNavUrl} target="_blank" rel="noopener noreferrer"
+                         style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '5px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', textDecoration: 'none' }}>
+                        去这里
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}
