@@ -144,6 +144,72 @@ function LocationContent({ locations }: { locations: DashData['customerLocations
   );
 }
 
+// ── AI 文档分析卡片（独立入口）──────────────────────────
+function DocUploadCard() {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setError('');
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    setUploading(false);
+    if (res.ok) {
+      const doc = await res.json();
+      window.location.href = `/documents/${doc.id}`;
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || '上传失败，请重试');
+    }
+    e.target.value = '';
+  };
+
+  return (
+    <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.15)' }}>
+            <svg className="w-4 h-4" style={{ color: '#a78bfa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>AI 文档分析</span>
+        </div>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Word · PDF · Excel</span>
+      </div>
+      <input ref={inputRef} type="file" className="hidden" onChange={handleFile}
+        accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.pptx,.ppt,.png,.jpg,.jpeg" />
+      <button onClick={() => inputRef.current?.click()} disabled={uploading}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all"
+        style={{
+          background: uploading ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.12)',
+          border: '1.5px dashed rgba(139,92,246,0.4)',
+          color: '#a78bfa', cursor: uploading ? 'default' : 'pointer',
+          opacity: uploading ? 0.7 : 1,
+        }}>
+        {uploading ? (
+          <>
+            <div style={{ width: '14px', height: '14px', border: '2px solid #a78bfa', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            正在上传并分析…
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            点击上传文档，AI 自动提取重点
+          </>
+        )}
+      </button>
+      {error && <p className="text-xs text-red-400 mt-2 text-center">{error}</p>}
+    </div>
+  );
+}
+
 // ── 上传文档按钮 ──────────────────────────────────────
 function UploadDocButton({ followUpId, customerId }: { followUpId: number; customerId?: number }) {
   const [uploading, setUploading] = useState(false);
@@ -301,6 +367,9 @@ export default function DashboardPage() {
             <LocationContent locations={data?.customerLocations || []} />
           </div>
         </div>
+
+        {/* AI 文档分析 */}
+        <DocUploadCard />
 
         {/* 近期跟进 */}
         <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -460,6 +529,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* AI 文档分析 */}
+        <DocUploadCard />
+
         {/* 行4：日历 */}
         <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <CalendarWidget />
@@ -579,6 +651,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* AI 文档分析 */}
+      <DocUploadCard />
 
       {/* 行4：日历 */}
       <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>

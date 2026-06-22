@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
   const followUpId = formData.get('follow_up_id') as string | null;
 
   if (!file) return NextResponse.json({ error: '请选择文件' }, { status: 400 });
-  if (!customerId) return NextResponse.json({ error: '缺少客户ID' }, { status: 400 });
 
   const ext = path.extname(file.name).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
@@ -36,7 +35,7 @@ export async function POST(request: NextRequest) {
   const result = await db.execute({
     sql: `INSERT INTO documents (follow_up_id, customer_id, original_name, stored_name, file_size, analysis_status)
           VALUES (?, ?, ?, ?, ?, 'pending')`,
-    args: [followUpId || null, customerId, file.name, storedName, file.size],
+    args: [followUpId || null, customerId || null, file.name, storedName, file.size],
   });
 
   const { rows: [doc] } = await db.execute({ sql: 'SELECT * FROM documents WHERE id = ?', args: [result.lastInsertRowid!] });
