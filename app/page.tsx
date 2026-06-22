@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import VoiceRecordWidget from './VoiceRecordWidget';
 import CalendarWidget from './CalendarWidget';
+import { downloadICS } from '@/lib/ics';
 import { useDevice } from './DevicePreviewProvider';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -359,9 +359,15 @@ export default function DashboardPage() {
                   <button onClick={() => markDone(r.id)} className="mt-0.5 w-4 h-4 rounded border border-zinc-600 flex-shrink-0 hover:border-emerald-500 transition-colors" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-zinc-300 leading-relaxed">{r.content}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs text-blue-400">{r.customer_name}</span>
                       {r.remind_date && <span className="text-xs text-amber-400">{r.remind_date}</span>}
+                      <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name)}
+                        className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
+                        style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', cursor: 'pointer' }}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        加入日历
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -405,31 +411,6 @@ export default function DashboardPage() {
           <CalendarWidget />
         </div>
 
-        {/* 快速录音：横向横幅 */}
-        <Link href="/quick-record"
-          className="rounded-2xl px-5 py-4 flex items-center gap-4 active:scale-95 transition-transform"
-          style={{ background: '#0f0f1a', border: '1px solid rgba(239,68,68,0.3)' }}>
-          <div className="relative flex-shrink-0">
-            <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20 scale-150" />
-            <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center shadow-lg shadow-red-900/50 relative z-10">
-              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16c-2.47 0-4.52-1.8-4.93-4.15-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
-              </svg>
-            </div>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white">快速语音记录</p>
-            <p className="text-xs text-zinc-500 mt-0.5">点击立即开始录音</p>
-          </div>
-          <svg className="w-5 h-5 text-zinc-600 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-
-        {/* 语音记录 */}
-        <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <VoiceRecordWidget />
-        </div>
       </div>
     );
   }
@@ -496,9 +477,15 @@ export default function DashboardPage() {
                   <button onClick={() => markDone(r.id)} className="mt-0.5 w-4 h-4 rounded border border-zinc-600 flex-shrink-0 hover:border-emerald-500 hover:bg-emerald-500/10 transition-colors" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-zinc-300 leading-relaxed">{r.content}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs text-blue-400">{r.customer_name}</span>
                       {r.remind_date && <span className="text-xs text-amber-400">{r.remind_date}</span>}
+                      <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name)}
+                        className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
+                        style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', cursor: 'pointer' }}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        加入日历
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -545,10 +532,6 @@ export default function DashboardPage() {
           <CalendarWidget />
         </div>
 
-        {/* 行5：语音记录（全宽） */}
-        <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <VoiceRecordWidget />
-        </div>
       </div>
     );
   }
@@ -615,9 +598,15 @@ export default function DashboardPage() {
                 <button onClick={() => markDone(r.id)} className="mt-0.5 w-4 h-4 rounded border border-zinc-600 flex-shrink-0 hover:border-emerald-500 hover:bg-emerald-500/10 transition-colors" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-zinc-300 leading-relaxed">{r.content}</p>
-                  <div className="flex items-center gap-3 mt-1.5">
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                     <Link href="#" className="text-xs text-blue-400 hover:underline">{r.customer_name}</Link>
                     {r.remind_date && <span className="text-xs text-amber-400">{r.remind_date}</span>}
+                    <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name)}
+                      className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
+                      style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', cursor: 'pointer' }}>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      加入日历
+                    </button>
                   </div>
                 </div>
               </div>
@@ -665,10 +654,6 @@ export default function DashboardPage() {
         <CalendarWidget />
       </div>
 
-      {/* 行5：语音记录（全宽） */}
-      <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-        <VoiceRecordWidget />
-      </div>
     </div>
   );
 }

@@ -40,13 +40,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <NavLinks />
               </div>
               <div className="flex items-center gap-1">
-                {/* 快速语音入口 */}
-                <a href="/quick-record"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-red-300 hover:text-red-200 hover:bg-red-900/30"
-                  title="快速语音记录">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="hidden sm:inline">语音记录</span>
-                </a>
                 {/* 设置 */}
                 <a href="/settings"
                   className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-zinc-800"
