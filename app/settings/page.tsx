@@ -203,6 +203,12 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [amapEditOpen, setAmapEditOpen] = useState(false);
+  const [aiKey, setAiKey] = useState('');
+  const [aiKeySaved, setAiKeySaved] = useState('');
+  const [aiKeyEditing, setAiKeyEditing] = useState(false);
+  const [aiKeyTesting, setAiKeyTesting] = useState(false);
+  const [aiKeyStatus, setAiKeyStatus] = useState<'idle'|'valid'|'invalid'>('idle');
+  const [aiKeyError, setAiKeyError] = useState('');
 
   useEffect(() => {
     const fromLocal = (): Profile => ({
@@ -248,7 +254,11 @@ export default function SettingsPage() {
       setProfile(merged); setForm(merged);
       setPasswordSet(mergedPwSet);
       document.documentElement.setAttribute('data-theme', merged.theme);
+      if (data.anthropic_key) { setAiKeySaved(data.anthropic_key); setAiKeyStatus('valid'); }
     }).catch(() => {});
+    // Also check localStorage
+    const localAiKey = localStorage.getItem('crm-anthropic-key') || '';
+    if (localAiKey) { setAiKeySaved(localAiKey); setAiKeyStatus('valid'); }
   }, []);
 
   const pwMismatch = !!pwInput && pwInput !== pwConfirm;
@@ -487,6 +497,69 @@ export default function SettingsPage() {
               <div className="p-3 rounded-xl text-xs" style={{ background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.15)', color: 'var(--text-muted)' }}>
                 保存后 Key 会同步到云端，更换设备无需重新填写
               </div>
+            </div>
+          )}
+        </Section>
+
+        {/* ── Anthropic API Key ── */}
+        <Section title="Anthropic API Key（AI 分析功能）">
+          {aiKeySaved && !aiKeyEditing ? (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>API Key</span>
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />已配置
+                  </span>
+                </div>
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {aiKeySaved.substring(0, 7)}{'•'.repeat(10)}{aiKeySaved.slice(-4)}
+                </p>
+              </div>
+              <button onClick={() => { setAiKey(aiKeySaved); setAiKeyEditing(true); setAiKeyStatus('idle'); setAiKeyError(''); }}
+                className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                修改 API Key
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Field label="API Key" hint="在 console.anthropic.com → API Keys 中获取">
+                <input value={aiKeyEditing ? aiKey : ''} onChange={e => { setAiKey(e.target.value); setAiKeyStatus('idle'); setAiKeyError(''); }}
+                  placeholder="sk-ant-api03-..." className={INP_CLS} style={INP_ST} />
+              </Field>
+              <div className="flex gap-2">
+                <button onClick={async () => {
+                  if (!aiKey.trim()) return;
+                  setAiKeyTesting(true); setAiKeyStatus('idle'); setAiKeyError('');
+                  const res = await fetch('/api/test-ai-key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: aiKey.trim() }) });
+                  const data = await res.json();
+                  setAiKeyTesting(false);
+                  if (data.valid) {
+                    setAiKeyStatus('valid');
+                    setAiKeySaved(aiKey.trim());
+                    setAiKeyEditing(false);
+                    localStorage.setItem('crm-anthropic-key', aiKey.trim());
+                    await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ anthropic_key: aiKey.trim() }) });
+                  } else {
+                    setAiKeyStatus('invalid'); setAiKeyError(data.error || '验证失败');
+                  }
+                }} disabled={aiKeyTesting || !aiKey.trim()}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+                  style={{ background: aiKeyStatus === 'valid' ? 'rgba(16,185,129,0.15)' : aiKeyStatus === 'invalid' ? 'rgba(239,68,68,0.1)' : 'var(--accent)', color: aiKeyStatus === 'valid' ? '#34d399' : aiKeyStatus === 'invalid' ? '#f87171' : '#fff', border: 'none', cursor: aiKeyTesting || !aiKey.trim() ? 'default' : 'pointer', opacity: aiKeyTesting || !aiKey.trim() ? 0.5 : 1 }}>
+                  {aiKeyTesting ? '验证中…' : aiKeyStatus === 'valid' ? '✓ 验证通过，已保存' : aiKeyStatus === 'invalid' ? '✗ 验证失败' : '验证并保存'}
+                </button>
+                {aiKeyEditing && (
+                  <button onClick={() => { setAiKeyEditing(false); setAiKey(''); setAiKeyStatus('idle'); setAiKeyError(''); }}
+                    className="px-4 py-2.5 rounded-xl text-sm"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer' }}>取消</button>
+                )}
+              </div>
+              {aiKeyError && <p className="text-xs text-red-400">{aiKeyError}</p>}
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Key 保存后同步到云端，文档上传、语音总结等 AI 功能均使用此 Key</p>
             </div>
           )}
         </Section>

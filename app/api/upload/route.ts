@@ -26,6 +26,10 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const db = await ensureDb();
 
+  // Get user API key (DB setting overrides env var)
+  const { rows: keyRow } = await db.execute({ sql: `SELECT value FROM user_settings WHERE key='anthropic_key'`, args: [] });
+  const userApiKey = (keyRow[0]?.value as string) || process.env.ANTHROPIC_API_KEY || '';
+
   // Create document record
   const insertResult = await db.execute({
     sql: `INSERT INTO documents (follow_up_id, customer_id, original_name, stored_name, file_size, analysis_status)
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
   const docId = insertResult.lastInsertRowid!;
 
   // Analyze in-memory (no disk write needed)
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!userApiKey) {
     await db.execute({ sql: `UPDATE documents SET analysis_status='pending' WHERE id=?`, args: [docId] });
     const { rows: [doc] } = await db.execute({ sql: 'SELECT * FROM documents WHERE id=?', args: [docId] });
     return NextResponse.json(doc, { status: 201 });
@@ -44,14 +48,14 @@ export async function POST(request: NextRequest) {
   try {
     let result;
     if (isImageFile(file.name)) {
-      result = await analyzeImageFromBuffer(buffer, file.name);
+      result = await analyzeImageFromBuffer(buffer, file.name, userApiKey);
     } else {
       const text = await extractTextFromBuffer(buffer, file.name);
       if (!text.trim()) {
         await db.execute({ sql: `UPDATE documents SET analysis_status='error' WHERE id=?`, args: [docId] });
         return NextResponse.json({ error: '无法从文档提取文字内容' }, { status: 400 });
       }
-      result = await analyzeText(text, file.name);
+      result = await analyzeText(text, file.name, userApiKey);
     }
 
     await db.execute({

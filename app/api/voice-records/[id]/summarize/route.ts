@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import Anthropic from '@anthropic-ai/sdk';
 
+const MODEL = 'claude-haiku-4-5-20251001';
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(_req: NextRequest, { params }: Params) {
@@ -11,14 +12,17 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   if (!rec) return NextResponse.json({ error: '记录不存在' }, { status: 404 });
   if (!rec.transcript || !String(rec.transcript).trim()) return NextResponse.json({ error: '没有转写内容可以总结' }, { status: 400 });
-  if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: '未配置 ANTHROPIC_API_KEY' }, { status: 500 });
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const { rows: keyRow } = await db.execute({ sql: `SELECT value FROM user_settings WHERE key='anthropic_key'`, args: [] });
+  const apiKey = (keyRow[0]?.value as string) || process.env.ANTHROPIC_API_KEY || '';
+  if (!apiKey) return NextResponse.json({ error: '未配置 Anthropic API Key，请在设置中添加' }, { status: 500 });
+
+  const client = new Anthropic({ apiKey });
 
   let message;
   try {
     message = await client.messages.create({
-      model: 'claude-3-haiku-20240307',
+      model: MODEL,
       max_tokens: 1500,
       messages: [{
         role: 'user',
@@ -39,10 +43,8 @@ ${rec.transcript}
   } catch (err) {
     const msg = String(err);
     let friendly = 'AI 请求失败：' + msg;
-    if (msg.includes('403') || msg.includes('forbidden') || msg.includes('not allowed'))
-      friendly = 'API Key 无权限（403）：请到 console.anthropic.com 重新生成 API Key，并更新 .env.local 后重启服务器';
-    else if (msg.includes('401'))
-      friendly = 'API Key 无效（401）：请检查 .env.local 中的 ANTHROPIC_API_KEY';
+    if (msg.includes('401')) friendly = 'API Key 无效（401），请在设置中检查 Anthropic API Key';
+    else if (msg.includes('403')) friendly = 'API Key 无权限（403），请到 console.anthropic.com 重新生成';
     return NextResponse.json({ error: friendly }, { status: 500 });
   }
 
