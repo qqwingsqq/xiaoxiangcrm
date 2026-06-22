@@ -41,9 +41,9 @@ function loadScript(key: string, secCode?: string): Promise<void> {
 
 function buildInfoContent(c: Customer, color: string, label: string, manual: boolean, pos?: [number, number]) {
   const navUrl = pos
-    ? `https://uri.amap.com/navigation?to=${pos[0]},${pos[1]},${encodeURIComponent(c.name)}&mode=car&src=xiaoxiangcrm`
+    ? `https://uri.amap.com/navigation?to=${pos[0]},${pos[1]},${encodeURIComponent(c.name)}&mode=car&callnative=1&src=xiaoxiangcrm`
     : c.address
-    ? `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(c.name)}&toadd=${encodeURIComponent(c.address)}&mode=car&src=xiaoxiangcrm`
+    ? `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(c.name)}&toadd=${encodeURIComponent(c.address)}&mode=car&callnative=1&src=xiaoxiangcrm`
     : null;
   return `
     <div style="padding:10px 12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:10px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:-apple-system,'PingFang SC',sans-serif">
@@ -631,9 +631,9 @@ export default function MapPage() {
                 ? haversine(myLocation[0], myLocation[1], item.position[0], item.position[1])
                 : null;
               const itemNavUrl = item.position
-                ? `https://uri.amap.com/navigation?to=${item.position[0]},${item.position[1]},${encodeURIComponent(item.customer.name)}&mode=car&src=xiaoxiangcrm`
+                ? `https://uri.amap.com/navigation?to=${item.position[0]},${item.position[1]},${encodeURIComponent(item.customer.name)}&mode=car&callnative=1&src=xiaoxiangcrm`
                 : item.customer.address
-                ? `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(item.customer.name)}&toadd=${encodeURIComponent(item.customer.address)}&mode=car&src=xiaoxiangcrm`
+                ? `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(item.customer.name)}&toadd=${encodeURIComponent(item.customer.address)}&mode=car&callnative=1&src=xiaoxiangcrm`
                 : null;
               return (
                 <div key={item.customer.id} style={{

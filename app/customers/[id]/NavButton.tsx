@@ -1,7 +1,7 @@
 'use client';
 
 export default function NavButton({ name, address }: { name: string; address: string }) {
-  const url = `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(name)}&toadd=${encodeURIComponent(address)}&mode=car&src=xiaoxiangcrm`;
+  const url = `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(name)}&toadd=${encodeURIComponent(address)}&mode=car&callnative=1&src=xiaoxiangcrm`;
   return (
     <button
       onClick={() => { try { window.open(url, '_system'); } catch { window.open(url, '_blank'); } }}

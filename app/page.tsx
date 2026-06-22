@@ -160,7 +160,10 @@ function UploadDocButton({ followUpId, customerId }: { followUpId: number; custo
     fd.append('follow_up_id', String(followUpId));
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
     setUploading(false);
-    if (res.ok) { setDone(true); setTimeout(() => setDone(false), 3000); }
+    if (res.ok) {
+      const doc = await res.json();
+      window.location.href = `/documents/${doc.id}`;
+    }
     e.target.value = '';
   };
 
