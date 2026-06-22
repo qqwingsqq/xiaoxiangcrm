@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
-import { ALLOWED_EXTENSIONS } from '@/lib/extract';
+import { ALLOWED_EXTENSIONS, extractTextFromBuffer, isImageFile } from '@/lib/extract';
+import { analyzeText, analyzeImageFromBuffer } from '@/lib/ai';
 import path from 'path';
-import fs from 'fs';
-import { randomUUID } from 'crypto';
 
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -19,26 +17,60 @@ export async function POST(request: NextRequest) {
 
   const ext = path.extname(file.name).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return NextResponse.json({
-      error: `不支持该文件格式，支持：Word、Excel、PPT、TXT、图片（JPG/PNG等）、PDF`
-    }, { status: 400 });
+    return NextResponse.json({ error: '不支持该文件格式，支持：Word、Excel、PPT、PDF、TXT、图片' }, { status: 400 });
   }
-
   if (file.size > 50 * 1024 * 1024) {
     return NextResponse.json({ error: '文件大小不能超过 50MB' }, { status: 400 });
   }
 
-  const storedName = `${randomUUID()}${ext}`;
-  const filePath = path.join(UPLOAD_DIR, storedName);
-  fs.writeFileSync(filePath, Buffer.from(await file.arrayBuffer()));
-
+  const buffer = Buffer.from(await file.arrayBuffer());
   const db = await ensureDb();
-  const result = await db.execute({
-    sql: `INSERT INTO documents (follow_up_id, customer_id, original_name, stored_name, file_size, analysis_status)
-          VALUES (?, ?, ?, ?, ?, 'pending')`,
-    args: [followUpId || null, customerId, file.name, storedName, file.size],
-  });
 
-  const { rows: [doc] } = await db.execute({ sql: 'SELECT * FROM documents WHERE id = ?', args: [result.lastInsertRowid!] });
+  // Create document record
+  const insertResult = await db.execute({
+    sql: `INSERT INTO documents (follow_up_id, customer_id, original_name, stored_name, file_size, analysis_status)
+          VALUES (?, ?, ?, ?, ?, 'analyzing')`,
+    args: [followUpId || null, customerId, file.name, file.name, file.size],
+  });
+  const docId = insertResult.lastInsertRowid!;
+
+  // Analyze in-memory (no disk write needed)
+  if (!process.env.ANTHROPIC_API_KEY) {
+    await db.execute({ sql: `UPDATE documents SET analysis_status='pending' WHERE id=?`, args: [docId] });
+    const { rows: [doc] } = await db.execute({ sql: 'SELECT * FROM documents WHERE id=?', args: [docId] });
+    return NextResponse.json(doc, { status: 201 });
+  }
+
+  try {
+    let result;
+    if (isImageFile(file.name)) {
+      result = await analyzeImageFromBuffer(buffer, file.name);
+    } else {
+      const text = await extractTextFromBuffer(buffer, file.name);
+      if (!text.trim()) {
+        await db.execute({ sql: `UPDATE documents SET analysis_status='error' WHERE id=?`, args: [docId] });
+        return NextResponse.json({ error: '无法从文档提取文字内容' }, { status: 400 });
+      }
+      result = await analyzeText(text, file.name);
+    }
+
+    await db.execute({
+      sql: `UPDATE documents SET summary=?, key_points=?, reminders=?, analysis_status='done' WHERE id=?`,
+      args: [result.summary, JSON.stringify(result.keyPoints), JSON.stringify(result.reminders), docId],
+    });
+
+    for (const r of result.reminders) {
+      await db.execute({
+        sql: `INSERT INTO reminders (customer_id, document_id, follow_up_id, content, remind_date) VALUES (?, ?, ?, ?, ?)`,
+        args: [customerId, docId, followUpId || null, r.content, r.remind_date || null],
+      });
+    }
+  } catch (err) {
+    await db.execute({ sql: `UPDATE documents SET analysis_status='error' WHERE id=?`, args: [docId] });
+    const msg = String(err);
+    return NextResponse.json({ error: `AI 分析失败：${msg.substring(0, 200)}` }, { status: 500 });
+  }
+
+  const { rows: [doc] } = await db.execute({ sql: 'SELECT * FROM documents WHERE id=?', args: [docId] });
   return NextResponse.json(doc, { status: 201 });
 }
