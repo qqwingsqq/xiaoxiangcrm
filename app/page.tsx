@@ -144,18 +144,30 @@ function LocationContent({ locations }: { locations: DashData['customerLocations
   );
 }
 
-// ── AI 文档分析卡片（独立入口）──────────────────────────
-function DocUploadCard() {
+// ── 近期跟进记录 标题行（含上传文档入口）──────────────────
+function FollowUpHeader() {
+  const [open, setOpen] = useState(false);
+  const [customers, setCustomers] = useState<{ id: number; name: string }[]>([]);
+  const [customerId, setCustomerId] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const toggle = () => {
+    if (!open && customers.length === 0) {
+      fetch('/api/customers').then(r => r.json()).then((list: { id: number; name: string }[]) => setCustomers(list));
+    }
+    setOpen(v => !v); setError('');
+  };
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!customerId) { setError('请先选择客户'); return; }
     setUploading(true); setError('');
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('customer_id', customerId);
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
     setUploading(false);
     if (res.ok) {
@@ -169,43 +181,45 @@ function DocUploadCard() {
   };
 
   return (
-    <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.15)' }}>
-            <svg className="w-4 h-4" style={{ color: '#a78bfa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>AI 文档分析</span>
-        </div>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Word · PDF · Excel</span>
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>近期跟进记录</span>
+        <button onClick={toggle}
+          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg transition-colors"
+          style={{ background: open ? 'rgba(139,92,246,0.15)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa', cursor: 'pointer' }}>
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          上传文档
+        </button>
       </div>
-      <input ref={inputRef} type="file" className="hidden" onChange={handleFile}
-        accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.pptx,.ppt,.png,.jpg,.jpeg" />
-      <button onClick={() => inputRef.current?.click()} disabled={uploading}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all"
-        style={{
-          background: uploading ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.12)',
-          border: '1.5px dashed rgba(139,92,246,0.4)',
-          color: '#a78bfa', cursor: uploading ? 'default' : 'pointer',
-          opacity: uploading ? 0.7 : 1,
-        }}>
-        {uploading ? (
-          <>
-            <div style={{ width: '14px', height: '14px', border: '2px solid #a78bfa', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-            正在上传并分析…
-          </>
-        ) : (
-          <>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            点击上传文档，AI 自动提取重点
-          </>
-        )}
-      </button>
-      {error && <p className="text-xs text-red-400 mt-2 text-center">{error}</p>}
+      {open && (
+        <div className="rounded-xl p-3 mb-2 space-y-2" style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.2)' }}>
+          <select value={customerId} onChange={e => setCustomerId(e.target.value)}
+            className="w-full text-xs px-2 py-1.5 rounded-lg outline-none"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+            <option value="">— 选择关联客户 —</option>
+            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input ref={inputRef} type="file" className="hidden" onChange={handleFile}
+            accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.pptx,.ppt,.png,.jpg,.jpeg" />
+          <button onClick={() => { if (!customerId) { setError('请先选择客户'); return; } inputRef.current?.click(); }}
+            disabled={uploading}
+            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium"
+            style={{ background: 'rgba(139,92,246,0.15)', border: '1px dashed rgba(139,92,246,0.4)', color: '#a78bfa', cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
+            {uploading
+              ? <><div style={{ width: '11px', height: '11px', border: '2px solid #a78bfa', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />上传中…</>
+              : <>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  选择文件（Word / PDF / Excel）
+                </>
+            }
+          </button>
+          {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -368,12 +382,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* AI 文档分析 */}
-        <DocUploadCard />
-
         {/* 近期跟进 */}
         <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <CardHeader title="近期跟进" />
+          <FollowUpHeader />
           <div className="space-y-2">
             {(data?.recentFollowUps || []).slice(0, 4).map(f => (
               <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
@@ -512,7 +523,7 @@ export default function DashboardPage() {
             <LocationContent locations={data?.customerLocations || []} />
           </div>
           <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 220 }}>
-            <CardHeader title="近期跟进" />
+            <FollowUpHeader />
             <div className="flex-1 overflow-y-auto space-y-2">
               {(data?.recentFollowUps || []).slice(0, 4).map(f => (
                 <div key={f.id} className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
@@ -528,9 +539,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-
-        {/* AI 文档分析 */}
-        <DocUploadCard />
 
         {/* 行4：日历 */}
         <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -634,7 +642,7 @@ export default function DashboardPage() {
           <LocationContent locations={data?.customerLocations || []} />
         </div>
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 240 }}>
-          <CardHeader title="近期跟进记录" />
+          <FollowUpHeader />
           <div className="flex-1 overflow-y-auto space-y-2">
             {(data?.recentFollowUps || []).map(f => (
               <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
@@ -651,9 +659,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* AI 文档分析 */}
-      <DocUploadCard />
 
       {/* 行4：日历 */}
       <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
