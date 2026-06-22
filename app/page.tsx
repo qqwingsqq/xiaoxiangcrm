@@ -6,12 +6,7 @@ import CalendarWidget from './CalendarWidget';
 import { downloadICS } from '@/lib/ics';
 import { useDevice } from './DevicePreviewProvider';
 
-const TYPE_LABELS: Record<string, string> = {
-  dealer: '经销商', terminal: '终端客户', partner: '合作伙伴', potential: '潜在客户',
-};
-const TYPE_DOT: Record<string, string> = {
-  dealer: '#a855f7', terminal: '#10b981', partner: '#3b82f6', potential: '#f59e0b',
-};
+interface CustomerType { id: number; key: string; label: string; color: string; }
 
 interface DashData {
   totalCustomers: number;
@@ -32,7 +27,7 @@ interface DashData {
 }
 
 // ── 圆环图 ──────────────────────────────────────────────
-function DonutChart({ data, size = 80 }: { data: { type: string; count: number }[]; size?: number }) {
+function DonutChart({ data, size = 80, colorMap = {}, labelMap = {} }: { data: { type: string; count: number }[]; size?: number; colorMap?: Record<string, string>; labelMap?: Record<string, string> }) {
   const total = data.reduce((s, d) => s + d.count, 0);
   if (total === 0) return <p className="text-xs text-zinc-600 text-center py-4">暂无数据</p>;
   let cum = 0;
@@ -49,15 +44,15 @@ function DonutChart({ data, size = 80 }: { data: { type: string; count: number }
   return (
     <div className="flex items-center gap-4">
       <svg viewBox="0 0 100 100" style={{ width: size, height: size, flexShrink: 0 }}>
-        {segs.map((s, i) => <path key={i} d={arc(s.p, s.s)} fill={TYPE_DOT[s.type] || '#6b7280'} />)}
+        {segs.map((s, i) => <path key={i} d={arc(s.p, s.s)} fill={colorMap[s.type] || '#6b7280'} />)}
         <text x="50" y="55" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700">{total}</text>
       </svg>
       <div className="flex-1 space-y-1.5 min-w-0">
         {segs.map((s, i) => (
           <div key={i} className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: TYPE_DOT[s.type] || '#6b7280' }} />
-              <span className="text-xs text-zinc-400 truncate">{TYPE_LABELS[s.type] || s.type}</span>
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colorMap[s.type] || '#6b7280' }} />
+              <span className="text-xs text-zinc-400 truncate">{labelMap[s.type] || s.type}</span>
             </div>
             <span className="text-xs font-semibold text-zinc-200 flex-shrink-0">{s.count}</span>
           </div>
@@ -68,7 +63,7 @@ function DonutChart({ data, size = 80 }: { data: { type: string; count: number }
 }
 
 // ── 进度条关联图 ──────────────────────────────────────
-function RelationBars({ data }: { data: { type: string; count: number }[] }) {
+function RelationBars({ data, colorMap = {}, labelMap = {} }: { data: { type: string; count: number }[]; colorMap?: Record<string, string>; labelMap?: Record<string, string> }) {
   const total = data.reduce((s, d) => s + d.count, 0);
   if (total === 0) return null;
   return (
@@ -77,13 +72,13 @@ function RelationBars({ data }: { data: { type: string; count: number }[] }) {
         <div key={d.type}>
           <div className="flex justify-between mb-1">
             <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: TYPE_DOT[d.type] }} />
-              {TYPE_LABELS[d.type]}
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: colorMap[d.type] || '#6b7280' }} />
+              {labelMap[d.type] || d.type}
             </span>
             <span className="text-xs text-zinc-500">{d.count}家 · {Math.round(d.count / total * 100)}%</span>
           </div>
           <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-track)' }}>
-            <div className="h-full rounded-full" style={{ width: `${d.count / total * 100}%`, background: TYPE_DOT[d.type] }} />
+            <div className="h-full rounded-full" style={{ width: `${d.count / total * 100}%`, background: colorMap[d.type] || '#6b7280' }} />
           </div>
         </div>
       ))}
@@ -114,7 +109,7 @@ function CardHeader({ title, action }: { title: string; action?: React.ReactNode
 }
 
 // ── 地址分布 ──────────────────────────────────────────
-function LocationContent({ locations }: { locations: DashData['customerLocations'] }) {
+function LocationContent({ locations, colorMap = {} }: { locations: DashData['customerLocations']; colorMap?: Record<string, string> }) {
   const groups: Record<string, typeof locations> = {};
   for (const loc of locations) {
     const k = loc.address.substring(0, 2);
@@ -132,7 +127,7 @@ function LocationContent({ locations }: { locations: DashData['customerLocations
             {locs.slice(0, 3).map(l => (
               <Link key={l.id} href={`/customers/${l.id}`}
                 className="text-xs px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity"
-                style={{ background: `${TYPE_DOT[l.type]}18`, color: TYPE_DOT[l.type] }}>
+                style={{ background: `${colorMap[l.type] || '#6b7280'}18`, color: colorMap[l.type] || '#9ca3af' }}>
                 {l.name.substring(0, 4)}
               </Link>
             ))}
@@ -269,12 +264,17 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [reminders, setReminders] = useState<DashData['pendingReminders']>([]);
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
 
   useEffect(() => {
     fetch('/api/dashboard').then(r => r.json()).then(d => {
       setData(d); setReminders(d.pendingReminders || []); setLoading(false);
     });
+    fetch('/api/customer-types').then(r => r.json()).then(setCustomerTypes).catch(() => {});
   }, []);
+
+  const typeColorMap = Object.fromEntries(customerTypes.map(t => [t.key, t.color]));
+  const typeLabelMap = Object.fromEntries(customerTypes.map(t => [t.key, t.label]));
 
   const markDone = async (id: number) => {
     await fetch(`/api/reminders/${id}`, {
@@ -328,10 +328,10 @@ export default function DashboardPage() {
               <Link key={c.id} href={`/customers/${c.id}`}
                 className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-zinc-800 active:bg-zinc-800 transition-colors group">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm"
-                  style={{ background: `${TYPE_DOT[c.type]}20`, color: TYPE_DOT[c.type] }}>{c.name.charAt(0)}</div>
+                  style={{ background: `${typeColorMap[c.type] || '#6b7280'}20`, color: typeColorMap[c.type] || '#6b7280' }}>{c.name.charAt(0)}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{c.name}</p>
-                  <p className="text-xs text-zinc-500">{TYPE_LABELS[c.type]}</p>
+                  <p className="text-xs text-zinc-500">{typeLabelMap[c.type] || c.type}</p>
                 </div>
               </Link>
             ))}
@@ -380,11 +380,11 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-2xl p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold text-white mb-2">客户分布</p>
-            <DonutChart data={data?.customersByType || []} size={64} />
+            <DonutChart data={data?.customersByType || []} size={64} colorMap={typeColorMap} labelMap={typeLabelMap} />
           </div>
           <div className="rounded-2xl p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold text-white mb-2">地址分布 <span className="font-normal text-zinc-500">({data?.customerLocations.length || 0}家)</span></p>
-            <LocationContent locations={data?.customerLocations || []} />
+            <LocationContent locations={data?.customerLocations || []} colorMap={typeColorMap} />
           </div>
         </div>
 
@@ -394,7 +394,7 @@ export default function DashboardPage() {
           <div className="space-y-2">
             {(data?.recentFollowUps || []).slice(0, 4).map(f => (
               <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
-                <div className="w-1 self-stretch rounded-full flex-shrink-0 mt-0.5" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280' }} />
+                <div className="w-1 self-stretch rounded-full flex-shrink-0 mt-0.5" style={{ background: typeColorMap[f.customer_type] || '#6b7280' || '#6b7280' }} />
                 <Link href={`/customers/${f.customer_id || 0}`} className="flex-1 min-w-0 group">
                   <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
                   <p className="text-xs text-zinc-500">{f.customer_name} · {f.created_at.substring(0, 10)}</p>
@@ -447,10 +447,10 @@ export default function DashboardPage() {
               {(data?.recentCustomers || []).slice(0, 6).map(c => (
                 <Link key={c.id} href={`/customers/${c.id}`} className="flex items-center gap-3 p-2 rounded-xl hover:bg-zinc-800 transition-colors group">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm"
-                    style={{ background: `${TYPE_DOT[c.type]}20`, color: TYPE_DOT[c.type] }}>{c.name.charAt(0)}</div>
+                    style={{ background: `${typeColorMap[c.type] || '#6b7280'}20`, color: typeColorMap[c.type] || '#6b7280' }}>{c.name.charAt(0)}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{c.name}</p>
-                    <p className="text-xs text-zinc-500">{c.contact_name || TYPE_LABELS[c.type]}</p>
+                    <p className="text-xs text-zinc-500">{c.contact_name || typeLabelMap[c.type] || c.type}</p>
                   </div>
                 </Link>
               ))}
@@ -497,8 +497,8 @@ export default function DashboardPage() {
           <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 280 }}>
             <CardHeader title="客户分布" />
             <div className="flex-1 flex flex-col justify-center overflow-hidden">
-              <DonutChart data={data?.customersByType || []} size={76} />
-              <RelationBars data={data?.customersByType || []} />
+              <DonutChart data={data?.customersByType || []} size={76} colorMap={typeColorMap} labelMap={typeLabelMap} />
+              <RelationBars data={data?.customersByType || []} colorMap={typeColorMap} labelMap={typeLabelMap} />
             </div>
           </div>
         </div>
@@ -507,14 +507,14 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 220 }}>
             <CardHeader title="客户地址分布" action={<span className="text-xs text-zinc-500">{data?.customerLocations.length || 0} 家</span>} />
-            <LocationContent locations={data?.customerLocations || []} />
+            <LocationContent locations={data?.customerLocations || []} colorMap={typeColorMap} />
           </div>
           <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 220 }}>
             <FollowUpHeader />
             <div className="flex-1 overflow-y-auto space-y-2">
               {(data?.recentFollowUps || []).slice(0, 4).map(f => (
                 <div key={f.id} className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
-                  <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280' }} />
+                  <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: typeColorMap[f.customer_type] || '#6b7280' || '#6b7280' }} />
                   <Link href={`/customers/${f.customer_id || 0}`} className="flex-1 min-w-0 group">
                     <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
                     <p className="text-xs text-zinc-500">{f.customer_name} · {f.created_at.substring(0, 10)}</p>
@@ -567,12 +567,12 @@ export default function DashboardPage() {
             {(data?.recentCustomers || []).map(c => (
               <Link key={c.id} href={`/customers/${c.id}`} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-zinc-800 transition-colors group">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm"
-                  style={{ background: `${TYPE_DOT[c.type]}20`, color: TYPE_DOT[c.type] }}>{c.name.charAt(0)}</div>
+                  style={{ background: `${typeColorMap[c.type] || '#6b7280'}20`, color: typeColorMap[c.type] || '#6b7280' }}>{c.name.charAt(0)}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{c.name}</p>
-                  <p className="text-xs text-zinc-500">{c.contact_name || TYPE_LABELS[c.type]}</p>
+                  <p className="text-xs text-zinc-500">{c.contact_name || typeLabelMap[c.type] || c.type}</p>
                 </div>
-                <span className="text-xs text-zinc-600 flex-shrink-0">{TYPE_LABELS[c.type]}</span>
+                <span className="text-xs text-zinc-600 flex-shrink-0">{typeLabelMap[c.type] || c.type}</span>
               </Link>
             ))}
           </div>
@@ -618,8 +618,8 @@ export default function DashboardPage() {
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 320 }}>
           <CardHeader title="客户分布" />
           <div className="flex-1 flex flex-col justify-center overflow-hidden">
-            <DonutChart data={data?.customersByType || []} size={96} />
-            <RelationBars data={data?.customersByType || []} />
+            <DonutChart data={data?.customersByType || []} size={96} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            <RelationBars data={data?.customersByType || []} colorMap={typeColorMap} labelMap={typeLabelMap} />
           </div>
         </div>
       </div>
@@ -628,14 +628,14 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 240 }}>
           <CardHeader title="客户地址分布" action={<span className="text-xs text-zinc-500">{data?.customerLocations.length || 0} 家有地址记录</span>} />
-          <LocationContent locations={data?.customerLocations || []} />
+          <LocationContent locations={data?.customerLocations || []} colorMap={typeColorMap} />
         </div>
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 240 }}>
           <FollowUpHeader />
           <div className="flex-1 overflow-y-auto space-y-2">
             {(data?.recentFollowUps || []).map(f => (
               <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--bg-inner)' }}>
-                <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: TYPE_DOT[f.customer_type] || '#6b7280' }} />
+                <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: typeColorMap[f.customer_type] || '#6b7280' || '#6b7280' }} />
                 <Link href={`/customers/${f.customer_id || 0}`} className="flex-1 min-w-0 group hover:opacity-80">
                   <p className="text-sm font-medium text-zinc-200 truncate group-hover:text-blue-400 transition-colors">{f.title}</p>
                   <p className="text-xs text-zinc-500 mt-0.5">{f.customer_name} · {f.created_at.substring(0, 10)}</p>

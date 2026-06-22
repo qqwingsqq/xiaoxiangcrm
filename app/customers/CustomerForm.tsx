@@ -1,19 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 
 const AddressPicker = dynamic(() => import('./AddressPicker'), { ssr: false });
 
-const CUSTOMER_TYPES = [
-  { value: 'dealer', label: '经销商' },
-  { value: 'terminal', label: '终端客户' },
-  { value: 'partner', label: '合作伙伴' },
-  { value: 'potential', label: '潜在客户' },
-];
-
 const SUGGESTED_TAGS = ['重要客户', '待跟进', '已成交', 'VIP', '新客户', '老客户'];
+
+interface CustomerType { id: number; key: string; label: string; color: string; }
 
 interface FormData {
   name: string;
@@ -38,10 +33,15 @@ export default function CustomerForm({ initial, customerId }: Props) {
   const [form, setForm] = useState<FormData>(initial || {
     name: '', type: '', address: '', contact_name: '', contact_info: '', wechat_id: '', tags: [],
   });
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showPicker, setShowPicker] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/customer-types').then(r => r.json()).then(setCustomerTypes).catch(() => {});
+  }, []);
 
   const set = (field: keyof FormData, value: string | string[]) =>
     setForm(f => ({ ...f, [field]: value }));
@@ -78,6 +78,8 @@ export default function CustomerForm({ initial, customerId }: Props) {
     }
   };
 
+  const selectedType = customerTypes.find(t => t.key === form.type);
+
   return (
     <>
     {showPicker && (
@@ -106,11 +108,26 @@ export default function CustomerForm({ initial, customerId }: Props) {
           <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
             客户类型 <span className="text-red-400">*</span>
           </label>
-          <select value={form.type} onChange={e => set('type', e.target.value)}
-            className={inputClass} style={{ ...inputStyle }}>
-            <option value="">请选择客户类型</option>
-            {CUSTOMER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              {selectedType && (
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ background: selectedType.color }} />
+              )}
+              <select value={form.type} onChange={e => set('type', e.target.value)}
+                className={inputClass} style={{ ...inputStyle, paddingLeft: selectedType ? '1.75rem' : undefined }}>
+                <option value="">请选择客户类型</option>
+                {customerTypes.map(t => (
+                  <option key={t.key} value={t.key}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {customerTypes.length === 0 && (
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              可在 <a href="/settings" className="text-blue-400 hover:underline">设置</a> 中管理客户类型
+            </p>
+          )}
         </div>
 
         <div className="sm:col-span-2">

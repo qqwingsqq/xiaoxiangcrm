@@ -6,15 +6,6 @@ import FollowUps from './FollowUps';
 import WeChatButton from '../WeChatButton';
 import NavButton from './NavButton';
 
-const TYPE_LABELS: Record<string, string> = {
-  dealer: '经销商', terminal: '终端客户', partner: '合作伙伴', potential: '潜在客户',
-};
-const TYPE_COLORS: Record<string, string> = {
-  dealer: 'bg-purple-900/60 text-purple-300 border border-purple-700/50',
-  terminal: 'bg-emerald-900/60 text-emerald-300 border border-emerald-700/50',
-  partner: 'bg-blue-900/60 text-blue-300 border border-blue-700/50',
-  potential: 'bg-amber-900/60 text-amber-300 border border-amber-700/50',
-};
 
 function Row({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -30,8 +21,12 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = await ensureDb();
-  const { rows: [row] } = await db.execute({ sql: 'SELECT * FROM customers WHERE id = ?', args: [id] });
+  const [{ rows: [row] }, { rows: typeRows }] = await Promise.all([
+    db.execute({ sql: 'SELECT * FROM customers WHERE id = ?', args: [id] }),
+    db.execute('SELECT * FROM customer_types ORDER BY sort_order, id'),
+  ]);
   if (!row) notFound();
+  const typeMap = Object.fromEntries((typeRows as unknown as { key: string; label: string; color: string }[]).map(t => [t.key, t]));
   const customer = row as unknown as {
     id: number; name: string; type: string; address: string | null;
     contact_name: string | null; contact_info: string | null;
@@ -57,8 +52,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <div>
             <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h2 className="text-lg font-semibold text-white">{customer.name}</h2>
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${TYPE_COLORS[customer.type] || 'bg-zinc-800 text-zinc-400'}`}>
-                {TYPE_LABELS[customer.type] || customer.type}
+              <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                style={{ background: `${typeMap[customer.type]?.color || '#6b7280'}22`, color: typeMap[customer.type]?.color || '#9ca3af' }}>
+                {typeMap[customer.type]?.label || customer.type}
               </span>
             </div>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>创建于 {customer.created_at}</p>

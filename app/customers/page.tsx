@@ -15,25 +15,21 @@ interface Customer {
   created_at: string;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  dealer: '经销商', terminal: '终端客户', partner: '合作伙伴', potential: '潜在客户',
-};
-const TYPE_COLORS: Record<string, string> = {
-  dealer: 'bg-purple-900/60 text-purple-300',
-  terminal: 'bg-emerald-900/60 text-emerald-300',
-  partner: 'bg-blue-900/60 text-blue-300',
-  potential: 'bg-amber-900/60 text-amber-300',
-};
-const TYPE_DOT: Record<string, string> = {
-  dealer: '#a855f7', terminal: '#10b981', partner: '#3b82f6', potential: '#f59e0b',
-};
+interface CustomerType { id: number; key: string; label: string; color: string; }
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const { device } = useDevice();
+
+  useEffect(() => {
+    fetch('/api/customer-types').then(r => r.json()).then(setCustomerTypes).catch(() => {});
+  }, []);
+
+  const typeMap = Object.fromEntries(customerTypes.map(t => [t.key, t]));
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -81,7 +77,7 @@ export default function CustomersPage() {
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)', maxWidth: 80 }}
           >
             <option value="">全部</option>
-            {Object.entries(TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {customerTypes.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           <Link href="/customers/new"
             className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-500 transition-colors flex-shrink-0">
@@ -135,7 +131,7 @@ export default function CustomersPage() {
               >
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
-                  style={{ background: `${TYPE_DOT[c.type] || '#6b7280'}22`, color: TYPE_DOT[c.type] || '#6b7280' }}>
+                  style={{ background: `${typeMap[c.type]?.color || '#6b7280'}22`, color: typeMap[c.type]?.color || '#6b7280' }}>
                   {c.name.charAt(0)}
                 </div>
 
@@ -145,8 +141,9 @@ export default function CustomersPage() {
                     <span className="text-sm font-medium text-zinc-100 group-hover:text-blue-400 transition-colors truncate">
                       {c.name}
                     </span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${TYPE_COLORS[c.type] || 'text-zinc-500'}`}>
-                      {TYPE_LABELS[c.type] || c.type}
+                    <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0"
+                      style={{ background: `${typeMap[c.type]?.color || '#6b7280'}22`, color: typeMap[c.type]?.color || '#9ca3af' }}>
+                      {typeMap[c.type]?.label || c.type}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>

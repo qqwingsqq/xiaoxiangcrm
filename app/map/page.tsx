@@ -20,12 +20,7 @@ interface GeoItem {
   manual: boolean;
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  dealer: '#a855f7', terminal: '#10b981', partner: '#3b82f6', potential: '#f59e0b',
-};
-const TYPE_LABELS: Record<string, string> = {
-  dealer: '经销商', terminal: '终端客户', partner: '合作伙伴', potential: '潜在客户',
-};
+interface CustomerType { id: number; key: string; label: string; color: string; }
 
 function loadScript(key: string, secCode?: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -108,6 +103,14 @@ export default function MapPage() {
   const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState('');
+  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
+
+  useEffect(() => {
+    fetch('/api/customer-types').then(r => r.json()).then(setCustomerTypes).catch(() => {});
+  }, []);
+
+  const typeColorMap = Object.fromEntries(customerTypes.map(t => [t.key, t.color]));
+  const typeLabelMap = Object.fromEntries(customerTypes.map(t => [t.key, t.label]));
 
   const fetchCustomers = () => {
     fetch('/api/customers').then(r => r.json()).then((data: Customer[]) => {
@@ -158,7 +161,7 @@ export default function MapPage() {
       setActiveId(item.customer.id);
       if (infoWinRef.current) {
         const c = item.customer;
-        infoWinRef.current.setContent(buildInfoContent(c, TYPE_COLORS[c.type] || '#6b7280', TYPE_LABELS[c.type] || c.type, item.manual, item.position!));
+        infoWinRef.current.setContent(buildInfoContent(c, typeColorMap[c.type] || '#6b7280', typeLabelMap[c.type] || c.type, item.manual, item.position!));
         infoWinRef.current.open(mapInst.current, [lng, lat]);
       }
     }, 300);
@@ -185,8 +188,8 @@ export default function MapPage() {
   }, [myLocation]);
 
   const createMarker = (map: any, infoWin: any, c: Customer, lng: number, lat: number, manual: boolean) => {
-    const color = TYPE_COLORS[c.type] || '#6b7280';
-    const label = TYPE_LABELS[c.type] || c.type;
+    const color = typeColorMap[c.type] || '#6b7280';
+    const label = typeLabelMap[c.type] || c.type;
     const marker = new window.AMap.Marker({
       position: [lng, lat],
       content: manual
@@ -335,7 +338,7 @@ export default function MapPage() {
       map.setZoomAndCenter(15, [lng, lat], true);
       if (infoWinRef.current) {
         const c = item.customer;
-        infoWinRef.current.setContent(buildInfoContent(c, TYPE_COLORS[c.type] || '#6b7280', TYPE_LABELS[c.type] || c.type, item.manual, item.position!));
+        infoWinRef.current.setContent(buildInfoContent(c, typeColorMap[c.type] || '#6b7280', typeLabelMap[c.type] || c.type, item.manual, item.position!));
         infoWinRef.current.open(map, [lng, lat]);
       }
     };
@@ -508,7 +511,7 @@ export default function MapPage() {
         {/* Type filters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {[{ key: 'all', label: '全部', color: 'var(--accent)' },
-            ...Object.entries(TYPE_LABELS).map(([k, l]) => ({ key: k, label: l, color: TYPE_COLORS[k] }))
+            ...customerTypes.map(t => ({ key: t.key, label: t.label, color: t.color }))
           ].map(opt => (
             <button key={opt.key} onClick={() => setFilter(opt.key)}
               className="text-xs px-2.5 py-1 rounded-lg"
@@ -599,7 +602,7 @@ export default function MapPage() {
               <svg style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', width: '14px', height: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <input value={listSearch} onChange={e => setListSearch(e.target.value)} placeholder="搜索客户…"
+              <input value={listSearch} onChange={e => setListSearch(e.target.value)} placeholder="搜索客户"
                 style={{ width: '100%', boxSizing: 'border-box', paddingLeft: '30px', paddingRight: '8px', paddingTop: '6px', paddingBottom: '6px', borderRadius: '8px', fontSize: '12px', outline: 'none', background: 'var(--bg-inner)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
             </div>
           </div>
@@ -612,7 +615,7 @@ export default function MapPage() {
               </div>
             )}
             {sortedGeoItems.map(item => {
-              const color = TYPE_COLORS[item.customer.type] || '#6b7280';
+              const color = typeColorMap[item.customer.type] || '#6b7280';
               const isActive = activeId === item.customer.id;
               const canFly = !!item.position;
               const dist = myLocation && item.position
@@ -640,7 +643,7 @@ export default function MapPage() {
                           {item.manual && <span style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--text-muted)' }}>手动</span>}
                         </p>
                         <p style={{ fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                          {TYPE_LABELS[item.customer.type] || item.customer.type}
+                          {typeLabelMap[item.customer.type] || item.customer.type}
                           {dist !== null && <span style={{ marginLeft: '6px', color: '#60a5fa' }}>{formatDist(dist)}</span>}
                         </p>
                       </div>
@@ -686,10 +689,10 @@ export default function MapPage() {
             <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: '2px solid white' }} />
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>我的位置</span>
           </div>
-          {Object.entries(TYPE_LABELS).map(([k, l]) => (
-            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: TYPE_COLORS[k] }} />
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{l}</span>
+          {customerTypes.map(t => (
+            <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: t.color }} />
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.label}</span>
             </div>
           ))}
         </div>
@@ -709,7 +712,7 @@ export default function MapPage() {
               style={{ width: '100%', padding: '10px 12px', borderRadius: '12px', fontSize: '13px', outline: 'none', marginBottom: '14px', background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
               <option value={0}>— 请选择要标记的客户 —</option>
               {allCustomers.map(c => (
-                <option key={c.id} value={c.id}>{c.name}（{TYPE_LABELS[c.type] || c.type}）{c.map_lat ? ' [已有标记]' : ''}</option>
+                <option key={c.id} value={c.id}>{c.name}（{typeLabelMap[c.type] || c.type}）{c.map_lat ? ' [已有标记]' : ''}</option>
               ))}
             </select>
             <div style={{ display: 'flex', gap: '8px' }}>
