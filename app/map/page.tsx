@@ -102,7 +102,6 @@ export default function MapPage() {
   const [geoItems, setGeoItems] = useState<GeoItem[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [listSearch, setListSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'map' | 'list'>('map');
   const [markingMode, setMarkingMode] = useState(false);
   const [markingPos, setMarkingPos] = useState<[number, number] | null>(null);
   const [markingCustomerId, setMarkingCustomerId] = useState<number>(0);
@@ -331,18 +330,20 @@ export default function MapPage() {
     const [lng, lat] = item.position;
     const map = mapInst.current;
     setActiveId(item.customer.id);
-    setActiveTab('map');
     const doFly = () => {
-      map.setZoomAndCenter(15, [lng, lat], true); // immediately=true: no animation conflict
+      map.resize();
+      map.setZoomAndCenter(15, [lng, lat], true);
       if (infoWinRef.current) {
         const c = item.customer;
         infoWinRef.current.setContent(buildInfoContent(c, TYPE_COLORS[c.type] || '#6b7280', TYPE_LABELS[c.type] || c.type, item.manual, item.position!));
         infoWinRef.current.open(map, [lng, lat]);
       }
     };
+    // On mobile the map is always visible above the list; scroll map into view then fly
     if (device === 'mobile') {
-      // Mobile: wait for tab-switch to make map visible before resize+fly
-      setTimeout(() => { map.resize(); doFly(); }, 120);
+      const mapEl = mapRef.current;
+      if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(doFly, 180);
     } else {
       doFly();
     }
@@ -539,19 +540,6 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Mobile tabs */}
-      {isMobile && (
-        <div style={{ display: 'flex', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-          {(['map', 'list'] as const).map(tab => (
-            <button key={tab} onClick={() => { setActiveTab(tab); if (tab === 'map') setTimeout(() => mapInst.current?.resize?.(), 80); }}
-              style={{ flex: 1, padding: '8px 0', fontSize: '12px', fontWeight: 500, border: 'none', cursor: 'pointer',
-                background: activeTab === tab ? 'var(--accent)' : 'var(--bg-card)',
-                color: activeTab === tab ? '#fff' : 'var(--text-muted)' }}>
-              {tab === 'map' ? '地图' : `列表 (${sortedGeoItems.length})`}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Map + List */}
       <div style={{ display: 'flex', gap: '12px', flexDirection: isMobile ? 'column' : 'row', alignItems: 'flex-start' }}>
@@ -562,7 +550,6 @@ export default function MapPage() {
           flex: isMobile ? undefined : '1 1 0%', minWidth: 0,
           width: isMobile ? '100%' : undefined, height: mapH,
           border: '1px solid var(--border)', cursor: markingMode ? 'crosshair' : 'default',
-          display: isMobile && activeTab === 'list' ? 'none' : 'block',
         }}>
           <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
           {loading && (
@@ -593,11 +580,12 @@ export default function MapPage() {
 
         {/* Customer list */}
         <div style={{
-          flexShrink: 0, width: isMobile ? '100%' : '256px', height: listH,
+          flexShrink: 0, width: isMobile ? '100%' : '256px',
+          height: isMobile ? 'auto' : listH,
+          maxHeight: isMobile ? '420px' : undefined,
           border: '1px solid var(--border)', background: 'var(--bg-card)',
           borderRadius: '16px', overflow: 'hidden',
-          display: isMobile && activeTab === 'map' ? 'none' : 'flex',
-          flexDirection: 'column',
+          display: 'flex', flexDirection: 'column',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
