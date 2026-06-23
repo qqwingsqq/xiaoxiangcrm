@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import AIAssistant from './AIAssistant';
 
 const NAV = [
   { href: '/', label: '首页', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -13,21 +14,44 @@ export default function NavLinks() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-1">
-      {NAV.map(n => {
-        const active = n.href === '/' ? pathname === '/' : pathname.startsWith(n.href);
-        return (
-          <Link key={n.href} href={n.href}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              active ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-            }`}>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={n.icon} />
-            </svg>
-            <span className="hidden sm:inline">{n.label}</span>
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      <nav className="flex items-center gap-1">
+        {/* 普通页面导航 */}
+        {NAV.map(n => {
+          const active = n.href === '/' ? pathname === '/' : pathname.startsWith(n.href);
+          return (
+            <Link key={n.href} href={n.href}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                active ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+              }`}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={n.icon} />
+              </svg>
+              <span className="hidden sm:inline">{n.label}</span>
+            </Link>
+          );
+        })}
+
+        {/* 分隔线 */}
+        <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 2px', flexShrink: 0 }} />
+
+        {/* AI 助手入口 —— 独立按钮，风格与普通导航一致但用紫色强调 */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('open-ai-assistant'))}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-violet-900/30"
+          style={{ color: '#a78bfa', border: 'none', background: 'transparent', cursor: 'pointer' }}
+          title="AI助手"
+        >
+          {/* chat-bubble icon */}
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          <span className="hidden sm:inline">AI助手</span>
+        </button>
+      </nav>
+
+      {/* AIAssistant 和触发按钮在同一 Client Component 树中，保证已挂载 */}
+      <AIAssistant />
+    </>
   );
 }

@@ -5,19 +5,17 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get('search') || '';
   const type = searchParams.get('type') || '';
+  const attribute = searchParams.get('attribute') || '';
+  const status = searchParams.get('status') || '';
 
   const db = await ensureDb();
   let sql = 'SELECT * FROM customers WHERE 1=1';
   const args: string[] = [];
 
-  if (search) {
-    sql += ' AND name LIKE ?';
-    args.push(`%${search}%`);
-  }
-  if (type) {
-    sql += ' AND type = ?';
-    args.push(type);
-  }
+  if (search) { sql += ' AND name LIKE ?'; args.push(`%${search}%`); }
+  if (type) { sql += ' AND type = ?'; args.push(type); }
+  if (attribute) { sql += ' AND customer_attribute = ?'; args.push(attribute); }
+  if (status) { sql += ' AND customer_status = ?'; args.push(status); }
   sql += ' ORDER BY created_at DESC';
 
   const { rows } = await db.execute({ sql, args });
@@ -27,19 +25,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body: CustomerInput = await request.json();
 
-  if (!body.name?.trim()) {
-    return NextResponse.json({ error: '客户名称不能为空' }, { status: 400 });
-  }
-  if (!body.type) {
-    return NextResponse.json({ error: '请选择客户类型' }, { status: 400 });
-  }
+  if (!body.name?.trim()) return NextResponse.json({ error: '客户名称不能为空' }, { status: 400 });
+  if (!body.customer_attribute) return NextResponse.json({ error: '请选择客户属性' }, { status: 400 });
+  if (!body.customer_status) return NextResponse.json({ error: '请选择客户状态' }, { status: 400 });
 
   const db = await ensureDb();
   const result = await db.execute({
-    sql: `INSERT INTO customers (name, type, address, contact_name, contact_info, wechat_id, tags) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO customers (name, type, customer_attribute, customer_status, address, contact_name, contact_info, wechat_id, tags)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.name.trim(),
-      body.type,
+      body.customer_attribute, // keep type in sync for backward compat
+      body.customer_attribute,
+      body.customer_status,
       body.address?.trim() || null,
       body.contact_name?.trim() || null,
       body.contact_info?.trim() || null,

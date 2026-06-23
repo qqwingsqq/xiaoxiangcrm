@@ -15,23 +15,23 @@ export async function PUT(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const body: CustomerInput = await request.json();
 
-  if (!body.name?.trim()) {
-    return NextResponse.json({ error: '客户名称不能为空' }, { status: 400 });
-  }
-  if (!body.type) {
-    return NextResponse.json({ error: '请选择客户类型' }, { status: 400 });
-  }
+  if (!body.name?.trim()) return NextResponse.json({ error: '客户名称不能为空' }, { status: 400 });
+  if (!body.customer_attribute) return NextResponse.json({ error: '请选择客户属性' }, { status: 400 });
+  if (!body.customer_status) return NextResponse.json({ error: '请选择客户状态' }, { status: 400 });
 
   const db = await ensureDb();
   const { rows: exists } = await db.execute({ sql: 'SELECT id FROM customers WHERE id = ?', args: [id] });
   if (!exists[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
   await db.execute({
-    sql: `UPDATE customers SET name=?, type=?, address=?, contact_name=?, contact_info=?, wechat_id=?, tags=?,
+    sql: `UPDATE customers SET name=?, type=?, customer_attribute=?, customer_status=?,
+          address=?, contact_name=?, contact_info=?, wechat_id=?, tags=?,
           updated_at=datetime('now','localtime') WHERE id=?`,
     args: [
       body.name.trim(),
-      body.type,
+      body.customer_attribute,
+      body.customer_attribute,
+      body.customer_status,
       body.address?.trim() || null,
       body.contact_name?.trim() || null,
       body.contact_info?.trim() || null,

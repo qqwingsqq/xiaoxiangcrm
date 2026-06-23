@@ -9,8 +9,9 @@ export default async function EditCustomerPage({ params }: { params: Promise<{ i
   const { rows: [row] } = await db.execute({ sql: 'SELECT * FROM customers WHERE id = ?', args: [id] });
   if (!row) notFound();
   const customer = row as unknown as {
-    id: number; name: string; type: string; address: string | null;
-    contact_name: string | null; contact_info: string | null;
+    id: number; name: string; type: string;
+    customer_attribute: string | null; customer_status: string | null;
+    address: string | null; contact_name: string | null; contact_info: string | null;
     wechat_id: string | null; tags: string;
   };
 
@@ -30,7 +31,9 @@ export default async function EditCustomerPage({ params }: { params: Promise<{ i
         <h2 className="text-base font-semibold text-white mb-5">编辑客户信息</h2>
         <CustomerForm
           initial={{
-            name: customer.name, type: customer.type,
+            name: customer.name,
+            customer_attribute: customer.customer_attribute || '',
+            customer_status: customer.customer_status || '',
             address: customer.address || '', contact_name: customer.contact_name || '',
             contact_info: customer.contact_info || '', wechat_id: customer.wechat_id || '', tags,
           }}

@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
-
 type Device = 'desktop' | 'tablet' | 'mobile';
 
 const DeviceContext = createContext<Device>('desktop');

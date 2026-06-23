@@ -9,6 +9,7 @@ declare global {
 
 interface Customer {
   id: number; name: string; type: string;
+  customer_attribute: string | null; customer_status: string | null;
   address: string | null; contact_name: string | null;
   map_lat: number | null; map_lng: number | null;
 }
@@ -20,7 +21,43 @@ interface GeoItem {
   manual: boolean;
 }
 
-interface CustomerType { id: number; key: string; label: string; color: string; }
+interface CustomerAttr { id: number; key: string; label: string; color: string; }
+interface CustomerStatus { id: number; key: string; label: string; shape: string; color: string; }
+
+// Generate SVG marker HTML: color from attribute, shape from status
+function makeMarkerSvg(color: string, shape: string, size = 26): string {
+  const h = size, w = size, c = size / 2;
+  const r = size * 0.35;
+  let inner = '';
+  switch (shape) {
+    case 'square':
+      inner = `<rect x="${c - r}" y="${c - r}" width="${r * 2}" height="${r * 2}" rx="2" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+      break;
+    case 'diamond':
+      inner = `<polygon points="${c},${c - r} ${c + r},${c} ${c},${c + r} ${c - r},${c}" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+      break;
+    case 'triangle':
+      inner = `<polygon points="${c},${c - r} ${c + r},${c + r * 0.8} ${c - r},${c + r * 0.8}" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+      break;
+    case 'star': {
+      const pts: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        const angle = (i * Math.PI) / 5 - Math.PI / 2;
+        const rad = i % 2 === 0 ? r : r * 0.4;
+        pts.push(`${c + rad * Math.cos(angle)},${c + rad * Math.sin(angle)}`);
+      }
+      inner = `<polygon points="${pts.join(' ')}" fill="${color}" stroke="white" stroke-width="1"/>`;
+      break;
+    }
+    case 'cross':
+      inner = `<line x1="${c - r * 0.7}" y1="${c - r * 0.7}" x2="${c + r * 0.7}" y2="${c + r * 0.7}" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+               <line x1="${c + r * 0.7}" y1="${c - r * 0.7}" x2="${c - r * 0.7}" y2="${c + r * 0.7}" stroke="${color}" stroke-width="3" stroke-linecap="round"/>`;
+      break;
+    default: // circle
+      inner = `<circle cx="${c}" cy="${c}" r="${r}" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5))">${inner}</svg>`;
+}
 
 function loadScript(key: string, secCode?: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -34,7 +71,8 @@ function loadScript(key: string, secCode?: string): Promise<void> {
   });
 }
 
-function buildInfoContent(c: Customer, color: string, label: string, manual: boolean, pos?: [number, number]) {
+function buildInfoContent(c: Customer, color: string, shape: string, attrLabel: string, statusLabel: string, manual: boolean, pos?: [number, number]) {
+  const label = [attrLabel, statusLabel].filter(Boolean).join(' · ');
   const navUrl = pos
     ? `https://uri.amap.com/navigation?to=${pos[0]},${pos[1]},${encodeURIComponent(c.name)}&mode=car&callnative=1&src=xiaoxiangcrm`
     : c.address
@@ -43,7 +81,7 @@ function buildInfoContent(c: Customer, color: string, label: string, manual: boo
   return `
     <div style="padding:10px 12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:10px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:-apple-system,'PingFang SC',sans-serif">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-        <span style="width:7px;height:7px;background:${color};flex-shrink:0;display:block;${manual ? 'border-radius:2px;transform:rotate(45deg)' : 'border-radius:50%'}"></span>
+        ${makeMarkerSvg(color, shape, 18)}
         <b style="font-size:13px;color:#f4f4f5">${c.name}</b>
         ${manual ? '<span style="font-size:10px;color:#71717a;margin-left:2px">手动</span>' : ''}
       </div>
@@ -82,6 +120,8 @@ export default function MapPage() {
   const markingModeRef = useRef(false);
   const myMarkerRef = useRef<any>(null);
   const targetIdRef = useRef<number | null>(null);
+  const geoItemsRef = useRef<GeoItem[]>([]);
+  const myLocationRef = useRef<[number, number] | null>(null);
 
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -92,7 +132,6 @@ export default function MapPage() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [filter, setFilter] = useState('all');
   const [mapBuilt, setMapBuilt] = useState(false);
   const [geoItems, setGeoItems] = useState<GeoItem[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -103,14 +142,26 @@ export default function MapPage() {
   const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState('');
-  const [customerTypes, setCustomerTypes] = useState<CustomerType[]>([]);
+  const [customerAttrs, setCustomerAttrs] = useState<CustomerAttr[]>([]);
+  const [customerStatuses, setCustomerStatuses] = useState<CustomerStatus[]>([]);
+  const [filterAttr, setFilterAttr] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
-    fetch('/api/customer-types').then(r => r.json()).then(setCustomerTypes).catch(() => {});
+    Promise.all([
+      fetch('/api/customer-attributes').then(r => r.json()),
+      fetch('/api/customer-statuses').then(r => r.json()),
+    ]).then(([attrs, statuses]) => { setCustomerAttrs(attrs); setCustomerStatuses(statuses); }).catch(() => {});
   }, []);
 
-  const typeColorMap = Object.fromEntries(customerTypes.map(t => [t.key, t.color]));
-  const typeLabelMap = Object.fromEntries(customerTypes.map(t => [t.key, t.label]));
+  const attrColorMap = Object.fromEntries(customerAttrs.map(a => [a.key, a.color]));
+  const attrLabelMap = Object.fromEntries(customerAttrs.map(a => [a.key, a.label]));
+  const statusShapeMap = Object.fromEntries(customerStatuses.map(s => [s.key, s.shape]));
+  const statusLabelMap = Object.fromEntries(customerStatuses.map(s => [s.key, s.label]));
+  const statusColorMap = Object.fromEntries(customerStatuses.map(s => [s.key, s.color]));
+
+  const getMarkerColor = (c: Customer) => attrColorMap[c.customer_attribute || ''] || '#6b7280';
+  const getMarkerShape = (c: Customer) => statusShapeMap[c.customer_status || ''] || 'circle';
 
   const fetchCustomers = () => {
     fetch('/api/customers').then(r => r.json()).then((data: Customer[]) => {
@@ -127,7 +178,7 @@ export default function MapPage() {
     setSecCode(localSec);
     fetchCustomers();
     const id = new URLSearchParams(window.location.search).get('id');
-    if (id) targetIdRef.current = Number(id);
+    if (id) { targetIdRef.current = Number(id); } else { targetIdRef.current = -1; /* -1 = fly to first */ }
     // Fetch from server in background (may override localStorage)
     fetch('/api/settings').then(r => r.json()).then((data: Record<string, string>) => {
       const serverKey = data.amap_key || '';
@@ -142,30 +193,75 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => { markingModeRef.current = markingMode; }, [markingMode]);
+  useEffect(() => { geoItemsRef.current = geoItems; }, [geoItems]);
+  useEffect(() => { myLocationRef.current = myLocation; }, [myLocation]);
 
   useEffect(() => {
     if (mapInst.current) setTimeout(() => mapInst.current?.resize?.(), 150);
   }, [device]);
 
-  // ── Auto-fly: fires whenever geoItems updates, once target is geocoded ────
+  // ── Auto-fly: specific customer from URL ?id= param ──────────────────────────
   useEffect(() => {
-    if (!targetIdRef.current || !mapBuilt) return;
-    const item = geoItems.find(i => i.customer.id === targetIdRef.current && i.position);
+    const tid = targetIdRef.current;
+    if (!tid || tid === -1 || !mapBuilt) return;
+    const item = geoItems.find(i => i.customer.id === tid && i.position);
     if (!item?.position) return;
-    const [lng, lat] = item.position;
     targetIdRef.current = null;
+    const [lng, lat] = item.position;
     setTimeout(() => {
       if (!mapInst.current) return;
-      mapInst.current.resize();
-      mapInst.current.setZoomAndCenter(15, [lng, lat], true); // immediately=true
+      mapInst.current.setZoomAndCenter(15, [lng, lat]);
       setActiveId(item.customer.id);
       if (infoWinRef.current) {
         const c = item.customer;
-        infoWinRef.current.setContent(buildInfoContent(c, typeColorMap[c.type] || '#6b7280', typeLabelMap[c.type] || c.type, item.manual, item.position!));
+        infoWinRef.current.setContent(buildInfoContent(c, getMarkerColor(c), getMarkerShape(c), attrLabelMap[c.customer_attribute || ''] || '', statusLabelMap[c.customer_status || ''] || '', item.manual, item.position!));
         infoWinRef.current.open(mapInst.current, [lng, lat]);
       }
     }, 300);
   }, [geoItems, mapBuilt]);
+
+  // ── Auto-fly: nearest customer when no ?id= param ────────────────────────────
+  useEffect(() => {
+    if (!mapBuilt || progress.total === 0 || progress.done < progress.total) return;
+    if (targetIdRef.current !== -1) return; // specific-id or already flown
+
+    let done = false;
+    const doFly = () => {
+      if (done) return;
+      done = true;
+      targetIdRef.current = null;
+
+      const items = geoItemsRef.current.filter(i => i.position);
+      if (!items.length || !mapInst.current) return;
+
+      const myLoc = myLocationRef.current;
+      let target = items[0];
+      if (myLoc) {
+        let minDist = Infinity;
+        for (const item of items) {
+          if (!item.position) continue;
+          const d = haversine(myLoc[0], myLoc[1], item.position[0], item.position[1]);
+          if (d < minDist) { minDist = d; target = item; }
+        }
+      }
+
+      const [lng, lat] = target.position!;
+      const c = target.customer;
+      mapInst.current.setZoomAndCenter(15, [lng, lat]);
+      setActiveId(c.id);
+      if (infoWinRef.current) {
+        infoWinRef.current.setContent(buildInfoContent(c, getMarkerColor(c), getMarkerShape(c), attrLabelMap[c.customer_attribute || ''] || '', statusLabelMap[c.customer_status || ''] || '', target.manual, target.position!));
+        infoWinRef.current.open(mapInst.current, [lng, lat]);
+      }
+    };
+
+    if (myLocationRef.current) {
+      doFly();
+    } else {
+      const timer = setTimeout(doFly, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [progress, mapBuilt]);
 
   // ── My location marker ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -188,21 +284,19 @@ export default function MapPage() {
   }, [myLocation]);
 
   const createMarker = (map: any, infoWin: any, c: Customer, lng: number, lat: number, manual: boolean) => {
-    const color = typeColorMap[c.type] || '#6b7280';
-    const label = typeLabelMap[c.type] || c.type;
+    const color = getMarkerColor(c);
+    const shape = getMarkerShape(c);
     const marker = new window.AMap.Marker({
       position: [lng, lat],
-      content: manual
-        ? `<div style="width:14px;height:14px;background:${color};border:2.5px solid rgba(255,255,255,0.9);border-radius:3px;transform:rotate(45deg);box-shadow:0 0 8px ${color}80;cursor:pointer"></div>`
-        : `<div style="width:13px;height:13px;background:${color};border:2.5px solid rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 8px ${color}80;cursor:pointer"></div>`,
-      offset: manual ? new window.AMap.Pixel(-7, -7) : new window.AMap.Pixel(-6, -6),
+      content: makeMarkerSvg(color, manual ? 'square' : shape),
+      offset: new window.AMap.Pixel(-13, -13),
       title: c.name, zIndex: 100,
     });
     markersRef.current.set(c.id, marker);
     marker.on('click', () => {
       if (markingModeRef.current) return;
       setActiveId(c.id);
-      infoWin.setContent(buildInfoContent(c, color, label, manual, [lng, lat]));
+      infoWin.setContent(buildInfoContent(c, color, shape, attrLabelMap[c.customer_attribute || ''] || '', statusLabelMap[c.customer_status || ''] || '', manual, [lng, lat]));
       infoWin.open(map, [lng, lat]);
     });
     map.add(marker);
@@ -234,7 +328,11 @@ export default function MapPage() {
         mapStyle: isLight ? 'amap://styles/normal' : 'amap://styles/dark',
       });
       mapInst.current = map;
-      map.on('click', (e: any) => { if (markingModeRef.current) setMarkingPos([e.lnglat.lng, e.lnglat.lat]); });
+      map.on('click', (e: any) => {
+        if (markingModeRef.current) { setMarkingPos([e.lnglat.lng, e.lnglat.lat]); return; }
+        infoWinRef.current?.close();
+        setActiveId(null);
+      });
       setLoading(false); setMapBuilt(true);
 
       // Re-add my location marker if already set
@@ -257,8 +355,20 @@ export default function MapPage() {
       const infoWin = new window.AMap.InfoWindow({ isCustom: true, offset: new window.AMap.Pixel(0, -14) });
       infoWinRef.current = infoWin;
 
-      const toShow = filter === 'all' ? customers : customers.filter(c => c.type === filter);
+      const toShow = customers.filter(c =>
+        (filterAttr === 'all' || c.customer_attribute === filterAttr) &&
+        (filterStatus === 'all' || c.customer_status === filterStatus)
+      );
       if (!cancelled) { setGeoItems(toShow.map(c => ({ customer: c, position: null, failed: false, manual: false }))); setProgress({ done: 0, total: toShow.length }); }
+
+      // Silently get user location for nearest-customer auto-fly
+      if (targetIdRef.current === -1 && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => { if (!cancelled) myLocationRef.current = [pos.coords.longitude, pos.coords.latitude]; },
+          () => {},
+          { timeout: 5000, maximumAge: 30000 }
+        );
+      }
 
       let doneCount = 0;
       toShow.forEach(c => {
@@ -296,7 +406,7 @@ export default function MapPage() {
       infoWinRef.current = null; myMarkerRef.current = null;
       setMapBuilt(false); setGeoItems([]);
     };
-  }, [apiKey, secCode, filter, customers]);
+  }, [apiKey, secCode, filterAttr, filterStatus, customers]);
 
   const locateMe = () => {
     if (!window.AMap) { setLocateError('地图未加载，请稍候再试'); return; }
@@ -338,7 +448,7 @@ export default function MapPage() {
       map.setZoomAndCenter(15, [lng, lat], true);
       if (infoWinRef.current) {
         const c = item.customer;
-        infoWinRef.current.setContent(buildInfoContent(c, typeColorMap[c.type] || '#6b7280', typeLabelMap[c.type] || c.type, item.manual, item.position!));
+        infoWinRef.current.setContent(buildInfoContent(c, getMarkerColor(c), getMarkerShape(c), attrLabelMap[c.customer_attribute || ''] || '', statusLabelMap[c.customer_status || ''] || '', item.manual, item.position!));
         infoWinRef.current.open(map, [lng, lat]);
       }
     };
@@ -389,7 +499,7 @@ export default function MapPage() {
   const isMobile = device === 'mobile';
   const mapH = isMobile ? 260 : device === 'tablet' ? 460 : 560;
   const listH = isMobile ? 360 : mapH;
-  const typeCounts = customers.reduce((acc, c) => { acc[c.type] = (acc[c.type] || 0) + 1; return acc; }, {} as Record<string, number>);
+
 
   const filteredGeoItems = geoItems.filter(item =>
     !listSearch || item.customer.name.includes(listSearch) || (item.customer.address || '').includes(listSearch)
@@ -508,21 +618,28 @@ export default function MapPage() {
           </button>
         </div>
 
-        {/* Type filters */}
+        {/* Attribute filters (color) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          {[{ key: 'all', label: '全部', color: 'var(--accent)' },
-            ...customerTypes.map(t => ({ key: t.key, label: t.label, color: t.color }))
-          ].map(opt => (
-            <button key={opt.key} onClick={() => setFilter(opt.key)}
-              className="text-xs px-2.5 py-1 rounded-lg"
-              style={{
-                background: filter === opt.key ? opt.color + '22' : 'var(--bg-card)',
-                border: `1px solid ${filter === opt.key ? opt.color + '55' : 'var(--border)'}`,
-                color: filter === opt.key ? opt.color : 'var(--text-secondary)',
-              }}>
-              {opt.label}{opt.key !== 'all' && typeCounts[opt.key] ? ` ${typeCounts[opt.key]}` : ''}
-            </button>
-          ))}
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>属性：</span>
+          {[{ key: 'all', label: '全部', color: 'var(--accent)' }, ...customerAttrs.map(a => ({ key: a.key, label: a.label, color: a.color }))]
+            .map(opt => (
+              <button key={opt.key} onClick={() => setFilterAttr(opt.key)} className="text-xs px-2.5 py-1 rounded-lg"
+                style={{ background: filterAttr === opt.key ? opt.color + '22' : 'var(--bg-card)', border: `1px solid ${filterAttr === opt.key ? opt.color + '55' : 'var(--border)'}`, color: filterAttr === opt.key ? opt.color : 'var(--text-secondary)' }}>
+                {opt.label}
+              </button>
+            ))}
+        </div>
+        {/* Status filters (shape) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>状态：</span>
+          {[{ key: 'all', label: '全部', color: 'var(--accent)', shape: '' }, ...customerStatuses.map(s => ({ key: s.key, label: s.label, color: s.color, shape: s.shape }))]
+            .map(opt => (
+              <button key={opt.key} onClick={() => setFilterStatus(opt.key)} className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1"
+                style={{ background: filterStatus === opt.key ? opt.color + '22' : 'var(--bg-card)', border: `1px solid ${filterStatus === opt.key ? opt.color + '55' : 'var(--border)'}`, color: filterStatus === opt.key ? opt.color : 'var(--text-secondary)' }}>
+                {opt.shape && <span dangerouslySetInnerHTML={{ __html: makeMarkerSvg(opt.color, opt.shape, 12) }} />}
+                {opt.label}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -615,7 +732,8 @@ export default function MapPage() {
               </div>
             )}
             {sortedGeoItems.map(item => {
-              const color = typeColorMap[item.customer.type] || '#6b7280';
+              const color = getMarkerColor(item.customer);
+              const shape = getMarkerShape(item.customer);
               const isActive = activeId === item.customer.id;
               const canFly = !!item.position;
               const dist = myLocation && item.position
@@ -636,14 +754,14 @@ export default function MapPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '12px', paddingRight: '8px' }}>
                     <button onClick={() => flyTo(item)} disabled={!canFly}
                       style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingTop: '8px', paddingBottom: '3px', background: 'none', border: 'none', cursor: canFly ? 'pointer' : 'default', textAlign: 'left', minWidth: 0 }}>
-                      <div style={{ width: '8px', height: '8px', flexShrink: 0, background: canFly ? color : 'var(--border)', borderRadius: item.manual ? '2px' : '50%', transform: item.manual ? 'rotate(45deg)' : 'none' }} />
+                      <div style={{ flexShrink: 0 }} dangerouslySetInnerHTML={{ __html: makeMarkerSvg(canFly ? color : '#4b5563', item.manual ? 'square' : shape, 14) }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: canFly ? 'var(--text-primary)' : 'var(--text-muted)', marginBottom: '1px' }}>
                           {item.customer.name}
                           {item.manual && <span style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--text-muted)' }}>手动</span>}
                         </p>
                         <p style={{ fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                          {typeLabelMap[item.customer.type] || item.customer.type}
+                          {[attrLabelMap[item.customer.customer_attribute || ''], statusLabelMap[item.customer.customer_status || '']].filter(Boolean).join(' · ') || item.customer.type}
                           {dist !== null && <span style={{ marginLeft: '6px', color: '#60a5fa' }}>{formatDist(dist)}</span>}
                         </p>
                       </div>
@@ -683,18 +801,30 @@ export default function MapPage() {
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', paddingLeft: '2px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', paddingLeft: '2px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: '2px solid white' }} />
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>我的位置</span>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>我的位置</span>
           </div>
-          {customerTypes.map(t => (
-            <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: t.color }} />
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.label}</span>
-            </div>
-          ))}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>颜色=属性：</span>
+            {customerAttrs.map(a => (
+              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: a.color }} />
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{a.label}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>形状=状态：</span>
+            {customerStatuses.map(s => (
+              <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <span dangerouslySetInnerHTML={{ __html: makeMarkerSvg(s.color, s.shape, 12) }} />
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{s.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
         <button onClick={() => { localStorage.removeItem('crm-amap-key'); localStorage.removeItem('crm-amap-security'); setApiKey(''); setSecCode(''); }}
           style={{ fontSize: '11px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>更换 Key</button>
@@ -712,7 +842,7 @@ export default function MapPage() {
               style={{ width: '100%', padding: '10px 12px', borderRadius: '12px', fontSize: '13px', outline: 'none', marginBottom: '14px', background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
               <option value={0}>— 请选择要标记的客户 —</option>
               {allCustomers.map(c => (
-                <option key={c.id} value={c.id}>{c.name}（{typeLabelMap[c.type] || c.type}）{c.map_lat ? ' [已有标记]' : ''}</option>
+                <option key={c.id} value={c.id}>{c.name}（{attrLabelMap[c.customer_attribute || ''] || c.type}）{c.map_lat ? ' [已有标记]' : ''}</option>
               ))}
             </select>
             <div style={{ display: 'flex', gap: '8px' }}>

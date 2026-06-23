@@ -21,17 +21,21 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = await ensureDb();
-  const [{ rows: [row] }, { rows: typeRows }] = await Promise.all([
+  const [{ rows: [row] }, { rows: attrRows }, { rows: statusRows }] = await Promise.all([
     db.execute({ sql: 'SELECT * FROM customers WHERE id = ?', args: [id] }),
-    db.execute('SELECT * FROM customer_types ORDER BY sort_order, id'),
+    db.execute('SELECT * FROM customer_attributes ORDER BY sort_order, id'),
+    db.execute('SELECT * FROM customer_statuses ORDER BY sort_order, id'),
   ]);
   if (!row) notFound();
-  const typeMap = Object.fromEntries((typeRows as unknown as { key: string; label: string; color: string }[]).map(t => [t.key, t]));
+  type AttrRow = { key: string; label: string; color: string };
+  type StatusRow = { key: string; label: string; shape: string; color: string };
+  const attrMap = Object.fromEntries((attrRows as unknown as AttrRow[]).map(t => [t.key, t]));
+  const statusMap = Object.fromEntries((statusRows as unknown as StatusRow[]).map(t => [t.key, t]));
   const customer = row as unknown as {
-    id: number; name: string; type: string; address: string | null;
-    contact_name: string | null; contact_info: string | null;
-    wechat_id: string | null;
-    tags: string; created_at: string; updated_at: string;
+    id: number; name: string; type: string;
+    customer_attribute: string | null; customer_status: string | null;
+    address: string | null; contact_name: string | null; contact_info: string | null;
+    wechat_id: string | null; tags: string; created_at: string; updated_at: string;
   };
 
   let tags: string[] = [];
@@ -52,10 +56,18 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <div>
             <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h2 className="text-lg font-semibold text-white">{customer.name}</h2>
-              <span className="text-xs px-2.5 py-1 rounded-full font-medium"
-                style={{ background: `${typeMap[customer.type]?.color || '#6b7280'}22`, color: typeMap[customer.type]?.color || '#9ca3af' }}>
-                {typeMap[customer.type]?.label || customer.type}
-              </span>
+              {customer.customer_attribute && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: `${attrMap[customer.customer_attribute]?.color || '#6b7280'}22`, color: attrMap[customer.customer_attribute]?.color || '#9ca3af' }}>
+                  {attrMap[customer.customer_attribute]?.label || customer.customer_attribute}
+                </span>
+              )}
+              {customer.customer_status && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: `${statusMap[customer.customer_status]?.color || '#6b7280'}22`, color: statusMap[customer.customer_status]?.color || '#9ca3af' }}>
+                  {statusMap[customer.customer_status]?.label || customer.customer_status}
+                </span>
+              )}
             </div>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>创建于 {customer.created_at}</p>
           </div>
