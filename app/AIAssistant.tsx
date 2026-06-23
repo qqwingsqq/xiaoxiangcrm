@@ -108,9 +108,13 @@ export default function AIAssistant() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputWrapRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const touchStartY = useRef<number | null>(null);
-  const micPressY = useRef<number | null>(null);
+  const pressY = useRef<number | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPress = useRef(false);
   const autoSendRef = useRef(false);
   const cancelledRef = useRef(false);
 
@@ -131,19 +135,14 @@ export default function AIAssistant() {
     touchStartY.current = null;
   };
 
-  // Push-to-talk handlers
-  const handleMicDown = (e: React.PointerEvent) => {
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    micPressY.current = e.clientY;
-    cancelledRef.current = false;
-    autoSendRef.current = false;
-    setCancelReady(false);
-
+  // Voice recording
+  const startVoiceRecording = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
     recognitionRef.current?.stop();
-
+    cancelledRef.current = false;
+    autoSendRef.current = false;
+    setCancelReady(false);
     const rec = new SR();
     rec.lang = 'zh-CN'; rec.continuous = false; rec.interimResults = false;
     rec.onresult = (ev: any) => {
@@ -152,12 +151,8 @@ export default function AIAssistant() {
       setRecording(false);
       setCancelReady(false);
       if (!cancelledRef.current) {
-        if (autoSendRef.current) {
-          autoSendRef.current = false;
-          sendMessage(text);
-        } else {
-          setInput(text);
-        }
+        if (autoSendRef.current) { autoSendRef.current = false; sendMessage(text); }
+        else { setInput(text); }
       }
     };
     rec.onerror = () => { setRecording(false); setCancelReady(false); recognitionRef.current = null; };
@@ -167,25 +162,45 @@ export default function AIAssistant() {
     setRecording(true);
   };
 
-  const handleMicMove = (e: React.PointerEvent) => {
-    if (!recording || micPressY.current === null) return;
-    setCancelReady(micPressY.current - e.clientY > 60);
+  // Long-press on input area → voice; short tap → text focus
+  const handleInputAreaDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (loading || !voiceOk) return;
+    pressY.current = e.clientY;
+    pointerIdRef.current = e.pointerId;
+    isLongPress.current = false;
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      isLongPress.current = true;
+      try { inputWrapRef.current?.setPointerCapture(pointerIdRef.current!); } catch {}
+      inputRef.current?.blur(); // dismiss keyboard before recording
+      startVoiceRecording();
+    }, 380);
   };
 
-  const handleMicUp = (e: React.PointerEvent) => {
+  const handleInputAreaMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isLongPress.current || !recording || pressY.current === null) return;
+    setCancelReady(pressY.current - e.clientY > 60);
+  };
+
+  const handleInputAreaUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    if (!isLongPress.current) {
+      // Short tap → focus the text input
+      inputRef.current?.focus();
+      return;
+    }
+    isLongPress.current = false;
     if (!recording) return;
-    const delta = micPressY.current !== null ? micPressY.current - e.clientY : 0;
-    micPressY.current = null;
+    const delta = pressY.current !== null ? pressY.current - e.clientY : 0;
+    pressY.current = null;
     setCancelReady(false);
     if (delta > 60) {
-      // slide-up → cancel
       cancelledRef.current = true;
       recognitionRef.current?.stop();
       recognitionRef.current = null;
       setRecording(false);
-      setInput('');
     } else {
-      // normal release → stop recording, auto-send transcript when ready
       autoSendRef.current = true;
       recognitionRef.current?.stop();
     }
@@ -334,7 +349,7 @@ export default function AIAssistant() {
               <div style={{ fontSize: 36, marginBottom: 10 }}>✨</div>
               <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', margin: '0 0 6px' }}>你好，我是 AI 助手</p>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 18px', lineHeight: 1.7 }}>
-                {voiceOk ? '长按麦克风说话，松开自动发送，上滑取消' : '输入内容发送消息'}<br />
+                {voiceOk ? '长按输入框说话，松开自动发送，上滑取消' : '输入内容发送消息'}<br />
                 📅 自动识别日程信息并提醒你保存
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
@@ -380,63 +395,44 @@ export default function AIAssistant() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Voice recording overlay (shown while recording) */}
-        {recording && (
-          <div style={{
-            position: 'absolute', inset: 0, borderRadius: '20px 20px 0 0',
-            background: cancelReady ? 'rgba(239,68,68,0.92)' : 'rgba(99,102,241,0.92)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 12, transition: 'background 0.2s',
-            zIndex: 10,
-            pointerEvents: 'none',
-          }}>
-            <div style={{ fontSize: 48 }}>{cancelReady ? '✕' : '🎙️'}</div>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'white' }}>
-              {cancelReady ? '松开取消' : '正在聆听…'}
-            </p>
-            <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
-              {cancelReady ? '' : '上滑取消发送'}
-            </p>
-          </div>
-        )}
 
         {/* Input bar */}
         <div style={{ padding: `8px 12px calc(env(safe-area-inset-bottom,0px) + 10px)`, flexShrink: 0, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)' }}>
-          {/* Push-to-talk mic */}
-          {voiceOk && (
-            <button
-              onPointerDown={handleMicDown}
-              onPointerMove={handleMicMove}
-              onPointerUp={handleMicUp}
-              onPointerCancel={handleMicUp}
-              style={{
-                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                background: recording ? (cancelReady ? 'rgba(239,68,68,0.2)' : 'rgba(99,102,241,0.2)') : 'var(--bg-input)',
-                color: recording ? (cancelReady ? '#f87171' : '#818cf8') : 'var(--text-muted)',
-                border: recording ? `1px solid ${cancelReady ? 'rgba(239,68,68,0.5)' : 'rgba(99,102,241,0.5)'}` : '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', touchAction: 'none', userSelect: 'none',
-              }}
-              title="长按说话"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="2" width="6" height="11" rx="3" fill={recording ? 'currentColor' : 'none'} />
-                <path d="M19 10v2a7 7 0 01-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            </button>
-          )}
-
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-            placeholder={voiceOk ? '长按🎙说话，或直接输入…' : '发送消息，AI自动识别日程…'}
-            disabled={loading || recording}
-            style={{ flex: 1, padding: '9px 14px', borderRadius: 20, fontSize: 14, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', outline: 'none' }}
-          />
+          {/* Input area: long-press = voice, tap = text */}
+          <div
+            ref={inputWrapRef}
+            onPointerDown={handleInputAreaDown}
+            onPointerMove={handleInputAreaMove}
+            onPointerUp={handleInputAreaUp}
+            onPointerCancel={handleInputAreaUp}
+            style={{ flex: 1, position: 'relative', touchAction: recording ? 'none' : 'auto', userSelect: 'none' }}
+          >
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+              placeholder={voiceOk ? '点击输入 / 长按说话' : '发送消息，AI自动识别日程…'}
+              disabled={loading}
+              readOnly={recording}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '9px 14px', borderRadius: 20, fontSize: 14, background: recording ? (cancelReady ? 'rgba(239,68,68,0.12)' : 'rgba(99,102,241,0.1)') : 'var(--bg-input)', border: `1px solid ${recording ? (cancelReady ? 'rgba(239,68,68,0.4)' : 'rgba(99,102,241,0.4)') : 'var(--border)'}`, color: recording ? (cancelReady ? '#f87171' : '#818cf8') : 'var(--text-primary)', outline: 'none', transition: 'background 0.2s, border-color 0.2s', cursor: voiceOk && !input ? 'pointer' : 'text', pointerEvents: recording ? 'none' : 'auto' }}
+            />
+            {/* Recording hint inside input */}
+            {recording && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, pointerEvents: 'none', borderRadius: 20 }}>
+                {cancelReady ? (
+                  <span style={{ fontSize: 13, color: '#f87171', fontWeight: 600 }}>↑ 松开取消</span>
+                ) : (
+                  <>
+                    <span style={{ display: 'flex', gap: 3 }}>
+                      {[0,1,2].map(k => <span key={k} style={{ width: 4, height: 4, borderRadius: '50%', background: '#818cf8', display: 'inline-block', animation: `ai-bounce 1.2s ${k*0.2}s ease-in-out infinite` }} />)}
+                    </span>
+                    <span style={{ fontSize: 13, color: '#818cf8', fontWeight: 600 }}>正在聆听… 上滑取消</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={() => sendMessage(input)}
