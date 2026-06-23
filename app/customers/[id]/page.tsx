@@ -5,6 +5,7 @@ import DeleteButton from './DeleteButton';
 import FollowUps from './FollowUps';
 import WeChatButton from '../WeChatButton';
 import NavButton from './NavButton';
+import WeChatChats from './WeChatChats';
 
 
 function Row({ label, value }: { label: string; value: string | null | undefined }) {
@@ -115,6 +116,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>最后更新</span>
           <span className="text-sm text-zinc-400">{customer.updated_at}</span>
         </div>
+      </div>
+
+      {/* 微信聊天记录 */}
+      <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <WeChatChats customerId={customer.id} />
       </div>
 
       {/* 跟进记录 */}

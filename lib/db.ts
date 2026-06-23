@@ -76,6 +76,21 @@ export async function ensureDb(): Promise<Client> {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
       )`,
+      `CREATE TABLE IF NOT EXISTS wechat_chats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        raw_content TEXT NOT NULL,
+        summary TEXT,
+        next_meeting TEXT,
+        discussed_features TEXT DEFAULT '[]',
+        next_steps TEXT DEFAULT '[]',
+        intent_level TEXT DEFAULT 'unknown',
+        key_points TEXT DEFAULT '[]',
+        analysis_status TEXT DEFAULT 'pending',
+        chat_date TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+      )`,
       `CREATE TABLE IF NOT EXISTS calendar_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
