@@ -75,11 +75,18 @@ export default function WeChatDashboard() {
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">汇总所有客户的微信沟通记录与AI提炼结果</p>
         </div>
-        <Link href="/customers"
-          className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
-          style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-          ← 返回客户列表
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/wechat/import"
+            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors text-white"
+            style={{ background: '#16a34a' }}>
+            🖥 自动导入指南
+          </Link>
+          <Link href="/customers"
+            className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+            ← 返回
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
