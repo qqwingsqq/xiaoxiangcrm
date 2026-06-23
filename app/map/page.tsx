@@ -144,6 +144,10 @@ export default function MapPage() {
   const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState('');
+  const [permDenied, setPermDenied] = useState(false);
+
+  const autoLocateDoneRef = useRef(false);
+  const autoFlyDoneRef = useRef(false);
   const [customerAttrs, setCustomerAttrs] = useState<CustomerAttr[]>([]);
   const [customerStatuses, setCustomerStatuses] = useState<CustomerStatus[]>([]);
   const [filterAttr, setFilterAttr] = useState('all');
@@ -222,48 +226,36 @@ export default function MapPage() {
     }, 300);
   }, [geoItems, mapBuilt]);
 
-  // ── Auto-fly: nearest customer when no ?id= param ────────────────────────────
+  // ── Auto-locate: request location as soon as map is ready ────────────────────
   useEffect(() => {
-    if (!mapBuilt || progress.total === 0 || progress.done < progress.total) return;
-    if (targetIdRef.current !== -1) return; // specific-id or already flown
+    if (!mapBuilt || autoLocateDoneRef.current) return;
+    // Skip auto-locate if a specific customer was requested via URL
+    const hasIdParam = !!new URLSearchParams(window.location.search).get('id');
+    if (hasIdParam) { autoFlyDoneRef.current = true; }
+    autoLocateDoneRef.current = true;
+    locateMe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapBuilt]);
 
-    let done = false;
-    const doFly = () => {
-      if (done) return;
-      done = true;
-      targetIdRef.current = null;
-
-      const items = geoItemsRef.current.filter(i => i.position);
-      if (!items.length || !mapInst.current) return;
-
-      const myLoc = myLocationRef.current;
-      let target = items[0];
-      if (myLoc) {
-        let minDist = Infinity;
-        for (const item of items) {
-          if (!item.position) continue;
-          const d = haversine(myLoc[0], myLoc[1], item.position[0], item.position[1]);
-          if (d < minDist) { minDist = d; target = item; }
-        }
+  // ── Auto-fly: fly to nearest customer when location is obtained ───────────────
+  useEffect(() => {
+    if (!myLocation || !mapBuilt || autoFlyDoneRef.current) return;
+    autoFlyDoneRef.current = true;
+    // Wait 1 s to allow geocoding to populate positions
+    const timer = setTimeout(() => {
+      const positioned = geoItemsRef.current.filter(i => i.position);
+      if (!positioned.length || !mapInst.current) return;
+      let nearest = positioned[0];
+      let minDist = Infinity;
+      for (const item of positioned) {
+        if (!item.position) continue;
+        const d = haversine(myLocation[0], myLocation[1], item.position[0], item.position[1]);
+        if (d < minDist) { minDist = d; nearest = item; }
       }
-
-      const [lng, lat] = target.position!;
-      const c = target.customer;
-      mapInst.current.setZoomAndCenter(15, [lng, lat]);
-      setActiveId(c.id);
-      if (infoWinRef.current) {
-        infoWinRef.current.setContent(buildInfoContent(c, getMarkerColor(c), getMarkerShape(c), attrLabelMap[c.customer_attribute || ''] || '', statusLabelMap[c.customer_status || ''] || '', target.manual, target.position!));
-        infoWinRef.current.open(mapInst.current, [lng, lat]);
-      }
-    };
-
-    if (myLocationRef.current) {
-      doFly();
-    } else {
-      const timer = setTimeout(doFly, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [progress, mapBuilt]);
+      flyTo(nearest);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [myLocation, mapBuilt]);
 
   // ── My location marker ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -363,15 +355,6 @@ export default function MapPage() {
       );
       if (!cancelled) { setGeoItems(toShow.map(c => ({ customer: c, position: null, failed: false, manual: false }))); setProgress({ done: 0, total: toShow.length }); }
 
-      // Silently get user location for nearest-customer auto-fly
-      if (targetIdRef.current === -1 && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          pos => { if (!cancelled) myLocationRef.current = [pos.coords.longitude, pos.coords.latitude]; },
-          () => {},
-          { timeout: 5000, maximumAge: 30000 }
-        );
-      }
-
       let doneCount = 0;
       toShow.forEach(c => {
         if (cancelled) return;
@@ -407,34 +390,46 @@ export default function MapPage() {
       mapInst.current?.destroy(); mapInst.current = null;
       infoWinRef.current = null; myMarkerRef.current = null;
       setMapBuilt(false); setGeoItems([]);
+      autoLocateDoneRef.current = false;
+      autoFlyDoneRef.current = false;
     };
   }, [apiKey, secCode, filterAttr, filterStatus, customers]);
 
   const locateMe = () => {
     if (!window.AMap) { setLocateError('地图未加载，请稍候再试'); return; }
-    setLocating(true); setLocateError('');
-    // Use AMap.Geolocation: returns GCJ02 coords (matches map), IP fallback in China
+    setLocating(true); setLocateError(''); setPermDenied(false);
+
+    const onSuccess = (lng: number, lat: number) => {
+      setLocating(false);
+      setPermDenied(false);
+      myLocationRef.current = [lng, lat];
+      setMyLocation([lng, lat]);
+    };
+
+    const onFail = (errMsg?: string) => {
+      setLocating(false);
+      const isDenied = errMsg?.includes('denied') || errMsg?.includes('PERMISSION') || errMsg?.includes('permission');
+      if (isDenied) {
+        setPermDenied(true);
+      } else {
+        setLocateError('定位失败，请检查位置权限');
+        setPermDenied(true);
+      }
+    };
+
     window.AMap.plugin('AMap.Geolocation', () => {
-      const geo = new window.AMap.Geolocation({
-        enableHighAccuracy: true,
-        timeout: 10000,
-        GeoLocationFirst: false,
-      });
+      const geo = new window.AMap.Geolocation({ enableHighAccuracy: true, timeout: 10000 });
       geo.getCurrentPosition((status: string, result: any) => {
-        setLocating(false);
         if (status === 'complete' && result.position) {
-          setMyLocation([result.position.lng, result.position.lat]);
+          onSuccess(result.position.lng, result.position.lat);
+        } else if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            pos => onSuccess(pos.coords.longitude, pos.coords.latitude),
+            err => onFail(err.message),
+            { timeout: 8000 }
+          );
         } else {
-          // Fallback to browser geolocation
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              pos => setMyLocation([pos.coords.longitude, pos.coords.latitude]),
-              () => setLocateError('定位失败，请检查位置权限设置'),
-              { timeout: 8000 }
-            );
-          } else {
-            setLocateError('定位失败：' + (result.message || '请检查位置权限'));
-          }
+          onFail(result?.message);
         }
       });
     });
@@ -567,6 +562,46 @@ export default function MapPage() {
   // ── Map ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3">
+
+      {/* ── 位置权限弹窗 ── */}
+      {permDenied && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+        }}>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: '16px', padding: '24px 20px', maxWidth: '320px', width: '100%',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <svg width="22" height="22" fill="none" stroke="#60a5fa" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+            <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center' }}>需要位置权限</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+              开启位置权限后，客户列表将按距离排序，并自动跳转到离你最近的客户
+            </p>
+            <p style={{ margin: '0 0 16px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6, padding: '8px 12px', borderRadius: 8, background: 'var(--bg-inner)', border: '1px solid var(--border)' }}>
+              📱 手机：浏览器设置 → 网站设置 → 位置 → 允许<br/>
+              💻 电脑：地址栏左侧图标 → 位置 → 允许
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setPermDenied(false); setLocating(false); }}
+                style={{ flex: 1, padding: '9px', borderRadius: 10, fontSize: 13, color: 'var(--text-muted)', background: 'var(--bg-input)', border: '1px solid var(--border)', cursor: 'pointer' }}>
+                暂不开启
+              </button>
+              <button onClick={() => { setPermDenied(false); locateMe(); }}
+                style={{ flex: 1, padding: '9px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: 'white', background: '#3b82f6', border: 'none', cursor: 'pointer' }}>
+                重试
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
