@@ -31,13 +31,13 @@ function makeMarkerSvg(color: string, shape: string, size = 26): string {
   let inner = '';
   switch (shape) {
     case 'square':
-      inner = `<rect x="${c - r}" y="${c - r}" width="${r * 2}" height="${r * 2}" rx="2" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+      inner = `<rect x="${c - r}" y="${c - r}" width="${r * 2}" height="${r * 2}" rx="2" fill="${color}"/>`;
       break;
     case 'diamond':
-      inner = `<polygon points="${c},${c - r} ${c + r},${c} ${c},${c + r} ${c - r},${c}" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+      inner = `<polygon points="${c},${c - r} ${c + r},${c} ${c},${c + r} ${c - r},${c}" fill="${color}"/>`;
       break;
     case 'triangle':
-      inner = `<polygon points="${c},${c - r} ${c + r},${c + r * 0.8} ${c - r},${c + r * 0.8}" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+      inner = `<polygon points="${c},${c - r} ${c + r},${c + r * 0.8} ${c - r},${c + r * 0.8}" fill="${color}"/>`;
       break;
     case 'star': {
       const pts: string[] = [];
@@ -46,7 +46,7 @@ function makeMarkerSvg(color: string, shape: string, size = 26): string {
         const rad = i % 2 === 0 ? r : r * 0.4;
         pts.push(`${c + rad * Math.cos(angle)},${c + rad * Math.sin(angle)}`);
       }
-      inner = `<polygon points="${pts.join(' ')}" fill="${color}" stroke="white" stroke-width="1"/>`;
+      inner = `<polygon points="${pts.join(' ')}" fill="${color}"/>`;
       break;
     }
     case 'cross':
@@ -54,7 +54,7 @@ function makeMarkerSvg(color: string, shape: string, size = 26): string {
                <line x1="${c + r * 0.7}" y1="${c - r * 0.7}" x2="${c - r * 0.7}" y2="${c + r * 0.7}" stroke="${color}" stroke-width="3" stroke-linecap="round"/>`;
       break;
     default: // circle
-      inner = `<circle cx="${c}" cy="${c}" r="${r}" fill="${color}" stroke="white" stroke-width="1.5"/>`;
+      inner = `<circle cx="${c}" cy="${c}" r="${r}" fill="${color}"/>`;
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5))">${inner}</svg>`;
 }
@@ -79,15 +79,17 @@ function buildInfoContent(c: Customer, color: string, shape: string, attrLabel: 
     ? `https://uri.amap.com/navigation?to=&toname=${encodeURIComponent(c.name)}&toadd=${encodeURIComponent(c.address)}&mode=car&callnative=1&src=xiaoxiangcrm`
     : null;
   return `
-    <div style="padding:10px 12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:10px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:-apple-system,'PingFang SC',sans-serif">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-        ${makeMarkerSvg(color, shape, 18)}
-        <b style="font-size:13px;color:#f4f4f5">${c.name}</b>
-        ${manual ? '<span style="font-size:10px;color:#71717a;margin-left:2px">手动</span>' : ''}
+    <div style="padding:10px 12px;background:#1e1e22;border:1px solid #3f3f46;border-radius:10px;width:200px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:-apple-system,'PingFang SC',sans-serif">
+      <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:5px">
+        <div style="flex-shrink:0;margin-top:1px">${makeMarkerSvg(color, shape, 18)}</div>
+        <div style="min-width:0;flex:1">
+          <b style="font-size:13px;color:#f4f4f5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all">${c.name}</b>
+          ${manual ? '<span style="font-size:10px;color:#71717a"> 手动</span>' : ''}
+        </div>
       </div>
-      <p style="margin:0 0 3px;font-size:11px;color:#71717a">${label}</p>
-      ${c.contact_name ? `<p style="margin:0 0 3px;font-size:11px;color:#a1a1aa">👤 ${c.contact_name}</p>` : ''}
-      <p style="margin:0 0 8px;font-size:10px;color:#52525b;max-width:200px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">📍 ${c.address || '手动标记位置'}</p>
+      <p style="margin:0 0 3px;font-size:11px;color:#71717a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</p>
+      ${c.contact_name ? `<p style="margin:0 0 3px;font-size:11px;color:#a1a1aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">👤 ${c.contact_name}</p>` : ''}
+      <p style="margin:0 0 8px;font-size:10px;color:#71717a;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all">📍 ${c.address || '手动标记位置'}</p>
       <div style="display:flex;gap:6px">
         <a href="/customers/${c.id}" style="flex:1;text-align:center;font-size:11px;color:#60a5fa;text-decoration:none;padding:4px 6px;border:1px solid rgba(59,130,246,0.3);border-radius:6px">查看详情</a>
         ${navUrl ? `<a href="${navUrl}" onclick="try{window.open(this.href,'_system')}catch(e){};return false;" style="flex:1;text-align:center;font-size:11px;color:#34d399;text-decoration:none;padding:4px 6px;border:1px solid rgba(52,211,153,0.3);border-radius:6px;cursor:pointer">去这里</a>` : ''}
