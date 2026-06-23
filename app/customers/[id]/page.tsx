@@ -38,9 +38,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     wechat_id: string | null; tags: string; created_at: string; updated_at: string;
   };
 
-  let tags: string[] = [];
-  try { tags = JSON.parse(customer.tags); } catch { tags = []; }
-
   return (
     <div className="space-y-5">
       {/* 面包屑 */}
@@ -113,14 +110,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           ) : (
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>未填写</span>
           )}
-        </div>
-        <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
-          <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>客户标签</span>
-          <div className="flex flex-wrap gap-1.5">
-            {tags.length > 0 ? tags.map((tag, i) => (
-              <span key={i} className="text-xs px-2 py-0.5 rounded text-zinc-400" style={{ background: '#333336' }}>{tag}</span>
-            )) : <span className="text-xs" style={{ color: 'var(--text-muted)' }}>未添加标签</span>}
-          </div>
         </div>
         <div className="flex gap-4 py-3">
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>最后更新</span>

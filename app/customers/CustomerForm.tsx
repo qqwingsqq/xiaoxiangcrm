@@ -6,7 +6,6 @@ import dynamic from 'next/dynamic';
 
 const AddressPicker = dynamic(() => import('./AddressPicker'), { ssr: false });
 
-const SUGGESTED_TAGS = ['重要客户', '待跟进', 'VIP', '新客户', '老客户'];
 const SHAPE_ICONS: Record<string, string> = {
   circle: '●', square: '■', diamond: '◆', triangle: '▲', star: '★', cross: '✕',
 };
@@ -15,7 +14,7 @@ interface CAttr { id: number; key: string; label: string; color: string; }
 interface CStatus { id: number; key: string; label: string; shape: string; color: string; }
 interface FormData {
   name: string; customer_attribute: string; customer_status: string;
-  address: string; contact_name: string; contact_info: string; wechat_id: string; tags: string[];
+  address: string; contact_name: string; contact_info: string; wechat_id: string;
 }
 interface Props { initial?: Partial<FormData>; customerId?: number; }
 
@@ -26,12 +25,11 @@ export default function CustomerForm({ initial, customerId }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<FormData>({
     name: '', customer_attribute: '', customer_status: '',
-    address: '', contact_name: '', contact_info: '', wechat_id: '', tags: [],
+    address: '', contact_name: '', contact_info: '', wechat_id: '',
     ...initial,
   });
   const [attributes, setAttributes] = useState<CAttr[]>([]);
   const [statuses, setStatuses] = useState<CStatus[]>([]);
-  const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showPicker, setShowPicker] = useState(false);
@@ -43,10 +41,8 @@ export default function CustomerForm({ initial, customerId }: Props) {
     ]).then(([a, s]) => { setAttributes(a); setStatuses(s); }).catch(() => {});
   }, []);
 
-  const set = (field: keyof FormData, value: string | string[]) =>
+  const set = (field: keyof FormData, value: string) =>
     setForm(f => ({ ...f, [field]: value }));
-  const addTag = (tag: string) => { const t = tag.trim(); if (t && !form.tags.includes(t)) set('tags', [...form.tags, t]); setTagInput(''); };
-  const removeTag = (tag: string) => set('tags', form.tags.filter(t => t !== tag));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setError('');
@@ -183,35 +179,6 @@ export default function CustomerForm({ initial, customerId }: Props) {
         )}
       </Section>
 
-      {/* ── 客户标签区（可选）── */}
-      <Section label="客户标签" optional>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput); } }}
-            placeholder="输入标签后按回车添加" className={IC} style={IS} />
-          <button type="button" onClick={() => addTag(tagInput)}
-            style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '13px', flexShrink: 0, color: 'var(--text-secondary)', background: 'var(--bg-input)', border: '1px solid var(--border)', cursor: 'pointer' }}>添加</button>
-        </div>
-        {form.tags.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {form.tags.map(tag => (
-              <span key={tag} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', padding: '4px 10px', borderRadius: '20px', color: '#93c5fd', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)' }}>
-                {tag}
-                <button type="button" onClick={() => removeTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#93c5fd', fontSize: '14px', lineHeight: 1, padding: 0 }}>×</button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>快速选择：</span>
-          {SUGGESTED_TAGS.filter(t => !form.tags.includes(t)).map(tag => (
-            <button key={tag} type="button" onClick={() => addTag(tag)}
-              style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', color: 'var(--text-muted)', background: 'none', border: '1px dashed var(--border-light)', cursor: 'pointer' }}>
-              + {tag}
-            </button>
-          ))}
-        </div>
-      </Section>
 
       {/* ── 操作按钮 ── */}
       <div style={{ display: 'flex', gap: '10px', paddingTop: '4px' }}>

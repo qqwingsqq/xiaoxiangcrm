@@ -46,10 +46,6 @@ export default function CustomersPage() {
     return () => clearTimeout(t);
   }, [fetchCustomers]);
 
-  const parseTags = (tags: string): string[] => {
-    try { return JSON.parse(tags); } catch { return []; }
-  };
-
   return (
     <div>
       {/* 固定搜索栏 */}
@@ -121,7 +117,6 @@ export default function CustomersPage() {
       ) : (
         <div className="grid gap-2.5">
           {customers.map(c => {
-            const tags = parseTags(c.tags);
             return (
               <Link key={c.id} href={`/customers/${c.id}`}
                 className="flex items-center gap-4 rounded-xl px-4 py-3.5 transition-all group"
@@ -152,17 +147,6 @@ export default function CustomersPage() {
                     {c.address && <span className="hidden sm:inline truncate max-w-xs">{c.address}</span>}
                   </div>
                 </div>
-
-                {/* Tags */}
-                {tags.length > 0 && (
-                  <div className="hidden sm:flex gap-1 flex-wrap justify-end max-w-[160px]">
-                    {tags.slice(0, 2).map((tag, i) => (
-                      <span key={i} className="text-xs px-1.5 py-0.5 rounded text-zinc-500"
-                        style={{ background: '#333336' }}>{tag}</span>
-                    ))}
-                    {tags.length > 2 && <span className="text-xs text-zinc-600">+{tags.length - 2}</span>}
-                  </div>
-                )}
 
                 <svg className="w-4 h-4 text-zinc-600 flex-shrink-0 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

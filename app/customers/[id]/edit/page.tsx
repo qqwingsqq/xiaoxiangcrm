@@ -12,11 +12,8 @@ export default async function EditCustomerPage({ params }: { params: Promise<{ i
     id: number; name: string; type: string;
     customer_attribute: string | null; customer_status: string | null;
     address: string | null; contact_name: string | null; contact_info: string | null;
-    wechat_id: string | null; tags: string;
+    wechat_id: string | null;
   };
-
-  let tags: string[] = [];
-  try { tags = JSON.parse(customer.tags); } catch { tags = []; }
 
   return (
     <div>
@@ -35,7 +32,7 @@ export default async function EditCustomerPage({ params }: { params: Promise<{ i
             customer_attribute: customer.customer_attribute || '',
             customer_status: customer.customer_status || '',
             address: customer.address || '', contact_name: customer.contact_name || '',
-            contact_info: customer.contact_info || '', wechat_id: customer.wechat_id || '', tags,
+            contact_info: customer.contact_info || '', wechat_id: customer.wechat_id || '',
           }}
           customerId={customer.id}
         />

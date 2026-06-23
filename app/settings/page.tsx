@@ -25,157 +25,297 @@ async function hashPassword(pw: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ── Customer type manager ─────────────────────────────────
+// ── Shared constants ───────────────────────────────────────
 const PRESET_COLORS = [
   '#a855f7', '#10b981', '#3b82f6', '#f59e0b',
   '#ef4444', '#ec4899', '#14b8a6', '#f97316',
   '#6366f1', '#84cc16', '#06b6d4', '#8b5cf6',
 ];
 
-interface CType { id: number; key: string; label: string; color: string; }
+const SHAPES = [
+  { key: 'circle', label: '圆形' },
+  { key: 'triangle', label: '三角' },
+  { key: 'square', label: '方形' },
+  { key: 'star', label: '星形' },
+  { key: 'cross', label: '叉形' },
+];
 
-function CustomerTypeManager() {
-  const [types, setTypes] = useState<CType[]>([]);
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {PRESET_COLORS.map(c => (
+        <button key={c} onClick={() => onChange(c)}
+          className="w-6 h-6 rounded-full transition-transform"
+          style={{ background: c, outline: value === c ? `2px solid ${c}` : 'none', outlineOffset: '2px', transform: value === c ? 'scale(1.2)' : 'scale(1)' }} />
+      ))}
+    </div>
+  );
+}
+
+// ── Customer attribute manager ─────────────────────────────
+interface CAttr { id: number; key: string; label: string; color: string; }
+
+function CustomerAttrManager() {
+  const [items, setItems] = useState<CAttr[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const [editColor, setEditColor] = useState('');
   const [addLabel, setAddLabel] = useState('');
-  const [addColor, setAddColor] = useState(PRESET_COLORS[4]);
+  const [addColor, setAddColor] = useState(PRESET_COLORS[2]);
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const load = () => fetch('/api/customer-types').then(r => r.json()).then(setTypes).catch(() => {});
+  const load = () => fetch('/api/customer-attributes').then(r => r.json()).then(setItems).catch(() => {});
   useEffect(() => { load(); }, []);
 
-  const startEdit = (t: CType) => { setEditingId(t.id); setEditLabel(t.label); setEditColor(t.color); setError(''); };
+  const startEdit = (t: CAttr) => { setEditingId(t.id); setEditLabel(t.label); setEditColor(t.color); setError(''); };
   const cancelEdit = () => { setEditingId(null); setError(''); };
 
   const saveEdit = async (id: number) => {
-    if (!editLabel.trim()) { setError('类型名称不能为空'); return; }
+    if (!editLabel.trim()) { setError('属性名称不能为空'); return; }
     setSaving(true);
-    const res = await fetch(`/api/customer-types/${id}`, {
+    const res = await fetch(`/api/customer-attributes/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ label: editLabel.trim(), color: editColor }),
     });
     setSaving(false);
     if (!res.ok) { setError((await res.json()).error || '保存失败'); return; }
-    setEditingId(null);
-    load();
+    setEditingId(null); load();
   };
 
-  const deleteType = async (id: number, label: string) => {
-    if (!confirm(`确认删除「${label}」类型？`)) return;
-    const res = await fetch(`/api/customer-types/${id}`, { method: 'DELETE' });
+  const deleteItem = async (id: number, label: string) => {
+    if (!confirm(`确认删除「${label}」属性？`)) return;
+    const res = await fetch(`/api/customer-attributes/${id}`, { method: 'DELETE' });
     if (!res.ok) { alert((await res.json()).error || '删除失败'); return; }
     load();
   };
 
-  const addType = async () => {
-    if (!addLabel.trim()) { setError('请填写类型名称'); return; }
+  const addItem = async () => {
+    if (!addLabel.trim()) { setError('请填写属性名称'); return; }
     setSaving(true);
-    const res = await fetch('/api/customer-types', {
+    const res = await fetch('/api/customer-attributes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ label: addLabel.trim(), color: addColor }),
     });
     setSaving(false);
     if (!res.ok) { setError((await res.json()).error || '添加失败'); return; }
-    setAddLabel(''); setAddOpen(false); setError('');
-    load();
+    setAddLabel(''); setAddOpen(false); setError(''); load();
   };
 
   return (
     <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>客户类型管理</h3>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>自定义客户分类，修改名称和颜色</p>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>客户属性管理</h3>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>地图中颜色对应客户属性，可自定义名称和颜色</p>
         </div>
         <button onClick={() => { setAddOpen(o => !o); setError(''); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
           style={{ background: 'var(--accent)', color: '#fff' }}>
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          添加类型
+          添加属性
         </button>
       </div>
-
       {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
-
-      {/* Add form */}
       {addOpen && (
         <div className="mb-4 p-3 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-          <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>新增客户类型</p>
-          <input value={addLabel} onChange={e => setAddLabel(e.target.value)} placeholder="类型名称"
+          <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>新增客户属性</p>
+          <input value={addLabel} onChange={e => setAddLabel(e.target.value)} placeholder="属性名称"
             className="w-full px-3 py-2 rounded-lg text-sm mb-2 outline-none"
             style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
-          <div className="flex flex-wrap gap-2 mb-3">
-            {PRESET_COLORS.map(c => (
-              <button key={c} onClick={() => setAddColor(c)}
-                className="w-6 h-6 rounded-full transition-transform"
-                style={{ background: c, outline: addColor === c ? `2px solid ${c}` : 'none', outlineOffset: '2px', transform: addColor === c ? 'scale(1.2)' : 'scale(1)' }} />
-            ))}
-          </div>
+          <div className="mb-3"><ColorPicker value={addColor} onChange={setAddColor} /></div>
           <div className="flex gap-2">
-            <button onClick={addType} disabled={saving}
+            <button onClick={addItem} disabled={saving}
               className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-              style={{ background: addColor }}>
-              {saving ? '保存中…' : '确认添加'}
-            </button>
+              style={{ background: addColor }}>{saving ? '保存中…' : '确认添加'}</button>
             <button onClick={() => { setAddOpen(false); setError(''); }}
-              className="px-4 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-              取消
-            </button>
+              className="px-4 py-1.5 rounded-lg text-xs font-medium"
+              style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>取消</button>
           </div>
         </div>
       )}
-
-      {/* Type list */}
       <div className="space-y-2">
-        {types.length === 0 && <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>加载中…</p>}
-        {types.map(t => (
+        {items.length === 0 && <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>加载中…</p>}
+        {items.map(t => (
           <div key={t.id}>
             {editingId === t.id ? (
               <div className="p-3 rounded-xl" style={{ background: 'var(--bg-input)', border: `1px solid ${t.color}40` }}>
-                <input value={editLabel} onChange={e => setEditLabel(e.target.value)} placeholder="类型名称"
+                <input value={editLabel} onChange={e => setEditLabel(e.target.value)} placeholder="属性名称"
                   className="w-full px-3 py-2 rounded-lg text-sm mb-2 outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {PRESET_COLORS.map(c => (
-                    <button key={c} onClick={() => setEditColor(c)}
-                      className="w-6 h-6 rounded-full transition-transform"
-                      style={{ background: c, outline: editColor === c ? `2px solid ${c}` : 'none', outlineOffset: '2px', transform: editColor === c ? 'scale(1.2)' : 'scale(1)' }} />
-                  ))}
-                </div>
+                <div className="mb-3"><ColorPicker value={editColor} onChange={setEditColor} /></div>
                 <div className="flex gap-2">
                   <button onClick={() => saveEdit(t.id)} disabled={saving}
                     className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-                    style={{ background: editColor }}>
-                    {saving ? '保存中…' : '保存'}
-                  </button>
+                    style={{ background: editColor }}>{saving ? '保存中…' : '保存'}</button>
                   <button onClick={cancelEdit}
-                    className="px-4 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                    取消
-                  </button>
+                    className="px-4 py-1.5 rounded-lg text-xs font-medium"
+                    style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>取消</button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl group"
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
                 style={{ background: 'var(--bg-inner)', border: '1px solid var(--border)' }}>
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: t.color }} />
                 <span className="flex-1 text-sm" style={{ color: 'var(--text-primary)' }}>{t.label}</span>
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t.key}</span>
-                <button onClick={() => startEdit(t)}
-                  className="p-1.5 rounded-lg transition-colors hover:bg-zinc-700"
-                  style={{ color: 'var(--text-muted)' }} title="编辑">
+                <button onClick={() => startEdit(t)} className="p-1.5 rounded-lg hover:bg-zinc-700" style={{ color: 'var(--text-muted)' }}>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </button>
-                <button onClick={() => deleteType(t.id, t.label)}
-                  className="p-1.5 rounded-lg transition-colors hover:bg-red-900/40"
-                  style={{ color: '#ef4444' }} title="删除">
+                <button onClick={() => deleteItem(t.id, t.label)} className="p-1.5 rounded-lg hover:bg-red-900/40" style={{ color: '#ef4444' }}>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Customer status manager ────────────────────────────────
+interface CStatus { id: number; key: string; label: string; color: string; shape: string; }
+
+function CustomerStatusManager() {
+  const [items, setItems] = useState<CStatus[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editColor, setEditColor] = useState('');
+  const [editShape, setEditShape] = useState('circle');
+  const [addLabel, setAddLabel] = useState('');
+  const [addColor, setAddColor] = useState(PRESET_COLORS[3]);
+  const [addShape, setAddShape] = useState('circle');
+  const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = () => fetch('/api/customer-statuses').then(r => r.json()).then(setItems).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const startEdit = (t: CStatus) => { setEditingId(t.id); setEditLabel(t.label); setEditColor(t.color); setEditShape(t.shape); setError(''); };
+  const cancelEdit = () => { setEditingId(null); setError(''); };
+
+  const saveEdit = async (id: number) => {
+    if (!editLabel.trim()) { setError('状态名称不能为空'); return; }
+    setSaving(true);
+    const res = await fetch(`/api/customer-statuses/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: editLabel.trim(), color: editColor, shape: editShape }),
+    });
+    setSaving(false);
+    if (!res.ok) { setError((await res.json()).error || '保存失败'); return; }
+    setEditingId(null); load();
+  };
+
+  const deleteItem = async (id: number, label: string) => {
+    if (!confirm(`确认删除「${label}」状态？`)) return;
+    const res = await fetch(`/api/customer-statuses/${id}`, { method: 'DELETE' });
+    if (!res.ok) { alert((await res.json()).error || '删除失败'); return; }
+    load();
+  };
+
+  const addItem = async () => {
+    if (!addLabel.trim()) { setError('请填写状态名称'); return; }
+    setSaving(true);
+    const res = await fetch('/api/customer-statuses', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: addLabel.trim(), color: addColor, shape: addShape }),
+    });
+    setSaving(false);
+    if (!res.ok) { setError((await res.json()).error || '添加失败'); return; }
+    setAddLabel(''); setAddOpen(false); setError(''); load();
+  };
+
+  const ShapePicker = ({ value, onChange }: { value: string; onChange: (s: string) => void }) => (
+    <div className="flex flex-wrap gap-2">
+      {SHAPES.map(s => (
+        <button key={s.key} onClick={() => onChange(s.key)}
+          className="px-2.5 py-1 rounded-lg text-xs transition-colors"
+          style={{ background: value === s.key ? 'rgba(99,102,241,0.2)' : 'var(--bg-base)', border: `1px solid ${value === s.key ? 'var(--accent)' : 'var(--border)'}`, color: value === s.key ? 'var(--accent)' : 'var(--text-secondary)' }}>
+          {s.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>客户状态管理</h3>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>地图中形状对应客户状态，可自定义名称、颜色和形状</p>
+        </div>
+        <button onClick={() => { setAddOpen(o => !o); setError(''); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+          style={{ background: 'var(--accent)', color: '#fff' }}>
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          添加状态
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+      {addOpen && (
+        <div className="mb-4 p-3 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+          <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>新增客户状态</p>
+          <input value={addLabel} onChange={e => setAddLabel(e.target.value)} placeholder="状态名称"
+            className="w-full px-3 py-2 rounded-lg text-sm mb-2 outline-none"
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+          <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>颜色</p>
+          <div className="mb-3"><ColorPicker value={addColor} onChange={setAddColor} /></div>
+          <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>形状</p>
+          <div className="mb-3"><ShapePicker value={addShape} onChange={setAddShape} /></div>
+          <div className="flex gap-2">
+            <button onClick={addItem} disabled={saving}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+              style={{ background: addColor }}>{saving ? '保存中…' : '确认添加'}</button>
+            <button onClick={() => { setAddOpen(false); setError(''); }}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium"
+              style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>取消</button>
+          </div>
+        </div>
+      )}
+      <div className="space-y-2">
+        {items.length === 0 && <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>加载中…</p>}
+        {items.map(t => (
+          <div key={t.id}>
+            {editingId === t.id ? (
+              <div className="p-3 rounded-xl" style={{ background: 'var(--bg-input)', border: `1px solid ${t.color}40` }}>
+                <input value={editLabel} onChange={e => setEditLabel(e.target.value)} placeholder="状态名称"
+                  className="w-full px-3 py-2 rounded-lg text-sm mb-2 outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>颜色</p>
+                <div className="mb-3"><ColorPicker value={editColor} onChange={setEditColor} /></div>
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>形状</p>
+                <div className="mb-3"><ShapePicker value={editShape} onChange={setEditShape} /></div>
+                <div className="flex gap-2">
+                  <button onClick={() => saveEdit(t.id)} disabled={saving}
+                    className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                    style={{ background: editColor }}>{saving ? '保存中…' : '保存'}</button>
+                  <button onClick={cancelEdit}
+                    className="px-4 py-1.5 rounded-lg text-xs font-medium"
+                    style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>取消</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                style={{ background: 'var(--bg-inner)', border: '1px solid var(--border)' }}>
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: t.color }} />
+                <span className="text-xs px-2 py-0.5 rounded" style={{ background: t.color + '22', color: t.color, border: `1px solid ${t.color}44` }}>{SHAPES.find(s => s.key === t.shape)?.label || t.shape}</span>
+                <span className="flex-1 text-sm" style={{ color: 'var(--text-primary)' }}>{t.label}</span>
+                <button onClick={() => startEdit(t)} className="p-1.5 rounded-lg hover:bg-zinc-700" style={{ color: 'var(--text-muted)' }}>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button onClick={() => deleteItem(t.id, t.label)} className="p-1.5 rounded-lg hover:bg-red-900/40" style={{ color: '#ef4444' }}>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
@@ -728,8 +868,11 @@ export default function SettingsPage() {
           )}
         </Section>
 
-        {/* ── Customer types ── */}
-        <CustomerTypeManager />
+        {/* ── Customer attributes ── */}
+        <CustomerAttrManager />
+
+        {/* ── Customer statuses ── */}
+        <CustomerStatusManager />
 
         {/* ── Save ── */}
         <button onClick={save} disabled={saving || !pwOk}

@@ -655,29 +655,6 @@ export default function MapPage() {
           </button>
         </div>
 
-        {/* Attribute filters (color) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>属性：</span>
-          {[{ key: 'all', label: '全部', color: 'var(--accent)' }, ...customerAttrs.map(a => ({ key: a.key, label: a.label, color: a.color }))]
-            .map(opt => (
-              <button key={opt.key} onClick={() => setFilterAttr(opt.key)} className="text-xs px-2.5 py-1 rounded-lg"
-                style={{ background: filterAttr === opt.key ? opt.color + '22' : 'var(--bg-card)', border: `1px solid ${filterAttr === opt.key ? opt.color + '55' : 'var(--border)'}`, color: filterAttr === opt.key ? opt.color : 'var(--text-secondary)' }}>
-                {opt.label}
-              </button>
-            ))}
-        </div>
-        {/* Status filters (shape) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>状态：</span>
-          {[{ key: 'all', label: '全部', color: 'var(--accent)', shape: '' }, ...customerStatuses.map(s => ({ key: s.key, label: s.label, color: s.color, shape: s.shape }))]
-            .map(opt => (
-              <button key={opt.key} onClick={() => setFilterStatus(opt.key)} className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1"
-                style={{ background: filterStatus === opt.key ? opt.color + '22' : 'var(--bg-card)', border: `1px solid ${filterStatus === opt.key ? opt.color + '55' : 'var(--border)'}`, color: filterStatus === opt.key ? opt.color : 'var(--text-secondary)' }}>
-                {opt.shape && <span dangerouslySetInnerHTML={{ __html: makeMarkerSvg(opt.color, opt.shape, 12) }} />}
-                {opt.label}
-              </button>
-            ))}
-        </div>
       </div>
 
       {/* Alerts */}
@@ -837,34 +814,47 @@ export default function MapPage() {
         </div>
       </div>
 
-      {/* Legend */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', paddingLeft: '2px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+      {/* Legend + Filters */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 12px', borderRadius: '14px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        {/* Row 1: My location + change key */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: '2px solid white' }} />
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>我的位置</span>
+            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', border: '2px solid white', flexShrink: 0 }} />
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>我的位置</span>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>颜色=属性：</span>
-            {customerAttrs.map(a => (
-              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: a.color }} />
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{a.label}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>形状=状态：</span>
-            {customerStatuses.map(s => (
-              <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <span dangerouslySetInnerHTML={{ __html: makeMarkerSvg(s.color, s.shape, 12) }} />
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{s.label}</span>
-              </div>
-            ))}
-          </div>
+          <button onClick={() => { localStorage.removeItem('crm-amap-key'); localStorage.removeItem('crm-amap-security'); setApiKey(''); setSecCode(''); }}
+            style={{ fontSize: '11px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>更换 Key</button>
         </div>
-        <button onClick={() => { localStorage.removeItem('crm-amap-key'); localStorage.removeItem('crm-amap-security'); setApiKey(''); setSecCode(''); }}
-          style={{ fontSize: '11px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>更换 Key</button>
+        {/* Row 2: Attribute filter (color) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>颜色 · 属性：</span>
+          <button onClick={() => setFilterAttr('all')}
+            style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', cursor: 'pointer', border: `1px solid ${filterAttr === 'all' ? 'var(--accent)' : 'var(--border)'}`, background: filterAttr === 'all' ? 'rgba(99,102,241,0.15)' : 'transparent', color: filterAttr === 'all' ? 'var(--accent)' : 'var(--text-muted)' }}>
+            全部
+          </button>
+          {customerAttrs.map(a => (
+            <button key={a.key} onClick={() => setFilterAttr(filterAttr === a.key ? 'all' : a.key)}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', padding: '2px 8px', borderRadius: '20px', cursor: 'pointer', border: `1px solid ${filterAttr === a.key ? a.color + '88' : 'var(--border)'}`, background: filterAttr === a.key ? a.color + '22' : 'transparent', color: filterAttr === a.key ? a.color : 'var(--text-muted)' }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: a.color, flexShrink: 0, display: 'inline-block' }} />
+              {a.label}
+            </button>
+          ))}
+        </div>
+        {/* Row 3: Status filter (shape) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>形状 · 状态：</span>
+          <button onClick={() => setFilterStatus('all')}
+            style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', cursor: 'pointer', border: `1px solid ${filterStatus === 'all' ? 'var(--accent)' : 'var(--border)'}`, background: filterStatus === 'all' ? 'rgba(99,102,241,0.15)' : 'transparent', color: filterStatus === 'all' ? 'var(--accent)' : 'var(--text-muted)' }}>
+            全部
+          </button>
+          {customerStatuses.map(s => (
+            <button key={s.key} onClick={() => setFilterStatus(filterStatus === s.key ? 'all' : s.key)}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', padding: '2px 8px', borderRadius: '20px', cursor: 'pointer', border: `1px solid ${filterStatus === s.key ? s.color + '88' : 'var(--border)'}`, background: filterStatus === s.key ? s.color + '22' : 'transparent', color: filterStatus === s.key ? s.color : 'var(--text-muted)' }}>
+              <span dangerouslySetInnerHTML={{ __html: makeMarkerSvg(s.color, s.shape, 11) }} />
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Manual marking dialog */}
