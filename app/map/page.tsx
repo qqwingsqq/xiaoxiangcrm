@@ -87,7 +87,7 @@ function buildInfoContent(c: Customer, color: string, shape: string, attrLabel: 
       </div>
       <p style="margin:0 0 3px;font-size:11px;color:#71717a">${label}</p>
       ${c.contact_name ? `<p style="margin:0 0 3px;font-size:11px;color:#a1a1aa">👤 ${c.contact_name}</p>` : ''}
-      <p style="margin:0 0 8px;font-size:10px;color:#52525b">📍 ${c.address || '手动标记位置'}</p>
+      <p style="margin:0 0 8px;font-size:10px;color:#52525b;max-width:200px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">📍 ${c.address || '手动标记位置'}</p>
       <div style="display:flex;gap:6px">
         <a href="/customers/${c.id}" style="flex:1;text-align:center;font-size:11px;color:#60a5fa;text-decoration:none;padding:4px 6px;border:1px solid rgba(59,130,246,0.3);border-radius:6px">查看详情</a>
         ${navUrl ? `<a href="${navUrl}" onclick="try{window.open(this.href,'_system')}catch(e){};return false;" style="flex:1;text-align:center;font-size:11px;color:#34d399;text-decoration:none;padding:4px 6px;border:1px solid rgba(52,211,153,0.3);border-radius:6px;cursor:pointer">去这里</a>` : ''}
