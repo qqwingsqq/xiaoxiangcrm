@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       sql: `SELECT wc.id, wc.customer_id, wc.created_at, c.name as customer_name
             FROM wechat_chats wc
             JOIN customers c ON c.id = wc.customer_id
-            WHERE wc.created_at > ?
+            WHERE wc.created_at > ? AND (c.is_blocked = 0 OR c.is_blocked IS NULL)
             ORDER BY wc.created_at DESC`,
       args: [since],
     });
@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     SELECT wc.*, c.name as customer_name, c.contact_name, c.contact_info as customer_wxid, c.customer_status, c.customer_attribute
     FROM wechat_chats wc
     JOIN customers c ON c.id = wc.customer_id
+    WHERE (c.is_blocked = 0 OR c.is_blocked IS NULL)
     ORDER BY wc.created_at DESC
   `);
   return NextResponse.json(rows);

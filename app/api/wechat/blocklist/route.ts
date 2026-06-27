@@ -15,6 +15,11 @@ export async function POST(req: NextRequest) {
     sql: 'INSERT OR REPLACE INTO wechat_blocklist (wxid, name) VALUES (?, ?)',
     args: [wxid, name || wxid],
   });
+  // 同步标记客户为已屏蔽
+  await db.execute({
+    sql: 'UPDATE customers SET is_blocked = 1 WHERE contact_info = ?',
+    args: [wxid],
+  });
   return NextResponse.json({ ok: true });
 }
 
@@ -22,5 +27,10 @@ export async function DELETE(req: NextRequest) {
   const { wxid } = await req.json();
   const db = await ensureDb();
   await db.execute({ sql: 'DELETE FROM wechat_blocklist WHERE wxid = ?', args: [wxid] });
+  // 解除屏蔽
+  await db.execute({
+    sql: 'UPDATE customers SET is_blocked = 0 WHERE contact_info = ?',
+    args: [wxid],
+  });
   return NextResponse.json({ ok: true });
 }

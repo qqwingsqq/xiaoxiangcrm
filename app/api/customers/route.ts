@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status') || '';
 
   const db = await ensureDb();
-  let sql = 'SELECT * FROM customers WHERE 1=1';
+  let sql = 'SELECT * FROM customers WHERE (is_blocked = 0 OR is_blocked IS NULL)';
   const args: string[] = [];
 
   if (search) { sql += ' AND name LIKE ?'; args.push(`%${search}%`); }

@@ -138,6 +138,7 @@ export async function ensureDb(): Promise<Client> {
       name TEXT,
       created_at TEXT DEFAULT (datetime('now','localtime'))
     )`); } catch (_) {}
+    try { await db.execute('ALTER TABLE customers ADD COLUMN is_blocked INTEGER DEFAULT 0'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN wechat_id TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN map_lat REAL'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN map_lng REAL'); } catch (_) {}
