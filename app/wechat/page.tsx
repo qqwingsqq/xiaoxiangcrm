@@ -45,6 +45,8 @@ export default function WeChatDashboard() {
   const [blocklist, setBlocklist]   = useState<BlocklistItem[]>([]);
   const [blWxid, setBlWxid]         = useState('');
   const [blName, setBlName]         = useState('');
+  const [organizing, setOrganizing] = useState(false);
+  const [orgProgress, setOrgProgress] = useState<{ done: number; remaining: number } | null>(null);
   const lastCheckRef = useRef<string>(new Date().toISOString());
 
   const loadChats = useCallback(() => {
@@ -75,6 +77,28 @@ export default function WeChatDashboard() {
     }, 30_000);
     return () => clearInterval(poll);
   }, []);
+
+  const organizeAll = useCallback(async () => {
+    setOrganizing(true);
+    setOrgProgress({ done: 0, remaining: 0 });
+    let totalDone = 0;
+    while (true) {
+      try {
+        const res = await fetch('/api/wechat/batch-analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batch_size: 8 }),
+        });
+        const data = await res.json();
+        totalDone += data.processed ?? 0;
+        setOrgProgress({ done: totalDone, remaining: data.remaining ?? 0 });
+        if (data.done || data.remaining === 0) break;
+        await new Promise(r => setTimeout(r, 800));
+      } catch { break; }
+    }
+    setOrganizing(false);
+    loadChats();
+  }, [loadChats]);
 
   const loadBlocklist = useCallback(() => {
     fetch('/api/wechat/blocklist').then(r => r.json()).then(setBlocklist);
@@ -148,17 +172,22 @@ export default function WeChatDashboard() {
           </h1>
           <p className="text-xs text-zinc-500 mt-0.5">汇总所有客户的微信沟通记录与AI提炼结果</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => setShowBlocklist(true)}
             className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors text-zinc-400 hover:text-white"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
             🚫 屏蔽名单
           </button>
-          <Link href="/wechat/import"
-            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors text-white"
-            style={{ background: '#16a34a' }}>
-            🖥 自动导入指南
-          </Link>
+          <button onClick={organizeAll} disabled={organizing}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors text-white disabled:opacity-60 flex items-center gap-1.5"
+            style={{ background: organizing ? '#1a3a1a' : '#16a34a', border: organizing ? '1px solid #16a34a' : 'none' }}>
+            {organizing ? (
+              <>
+                <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                整理中 {orgProgress ? `${orgProgress.done}条 剩余${orgProgress.remaining}` : ''}
+              </>
+            ) : '✨ 一键整理聊天记录'}
+          </button>
           <Link href="/customers"
             className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
