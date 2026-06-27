@@ -59,6 +59,9 @@ export default function QuickRecordPage() {
   const [savedId, setSavedId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [supported, setSupported] = useState(true);
+  const [whisperLoading, setWhisperLoading] = useState(false);
+  const [hasOpenAiKey, setHasOpenAiKey] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -73,8 +76,12 @@ export default function QuickRecordPage() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setSupported(false);
-      setError('您的浏览器不支持语音识别，请使用 Chrome 或 Safari');
+      setError('您的浏览器不支持实时语音识别，可通过下方「上传音频」使用 Whisper 转写');
     }
+    // Check if OpenAI key is configured
+    fetch('/api/settings').then(r => r.json()).then((d: Record<string, string>) => {
+      if (d.openai_key || localStorage.getItem('crm-openai-key')) setHasOpenAiKey(true);
+    }).catch(() => {});
     return () => stopTimer();
   }, []);
 
@@ -353,15 +360,48 @@ export default function QuickRecordPage() {
       <div className="pb-safe pb-10 px-6">
         {/* Primary button */}
         {phase === 'idle' && (
-          <button onClick={startRecording} disabled={!supported}
-            className="w-full flex flex-col items-center gap-1 disabled:opacity-40">
-            <div className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 transition-all flex items-center justify-center shadow-lg shadow-red-900/50">
-              <svg className="w-9 h-9 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16c-2.47 0-4.52-1.8-4.93-4.15-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
-              </svg>
-            </div>
-            <span className="text-xs text-zinc-500 mt-1">点击开始录音</span>
-          </button>
+          <div className="flex flex-col items-center gap-4 w-full">
+            <button onClick={startRecording} disabled={!supported}
+              className="flex flex-col items-center gap-1 disabled:opacity-40">
+              <div className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 transition-all flex items-center justify-center shadow-lg shadow-red-900/50">
+                <svg className="w-9 h-9 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16c-2.47 0-4.52-1.8-4.93-4.15-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" />
+                </svg>
+              </div>
+              <span className="text-xs text-zinc-500 mt-1">点击开始录音</span>
+            </button>
+            {hasOpenAiKey && (
+              <>
+                <div className="flex items-center gap-2 w-full">
+                  <div className="flex-1 h-px bg-zinc-800" />
+                  <span className="text-xs text-zinc-600">或</span>
+                  <div className="flex-1 h-px bg-zinc-800" />
+                </div>
+                <input ref={fileInputRef} type="file" accept="audio/*,video/*" className="hidden"
+                  onChange={async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setWhisperLoading(true); setError('');
+                    const form = new FormData();
+                    form.append('audio', file, file.name);
+                    try {
+                      const res = await fetch('/api/transcribe', { method: 'POST', body: form });
+                      const data = await res.json();
+                      if (data.text) { setTranscript(data.text); setPhase('done'); }
+                      else setError(data.error || 'Whisper 转写失败');
+                    } catch { setError('Whisper 转写失败'); }
+                    setWhisperLoading(false);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }} />
+                <button onClick={() => fileInputRef.current?.click()} disabled={whisperLoading}
+                  className="w-full py-3 rounded-2xl text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)', color: '#c084fc' }}>
+                  {whisperLoading ? <><span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />Whisper 转写中…</> : '🎙️ 上传音频文件转写'}
+                </button>
+                <p className="text-xs text-zinc-700 text-center">支持 mp3 / m4a / wav / mp4 等格式，使用 OpenAI Whisper</p>
+              </>
+            )}
+          </div>
         )}
 
         {phase === 'recording' && (
@@ -408,6 +448,31 @@ export default function QuickRecordPage() {
 
         {phase === 'done' && (
           <div className="flex flex-col gap-3">
+            {/* Whisper re-transcribe button */}
+            {(hasOpenAiKey && audioChunksRef.current.length > 0) && (
+              <button onClick={async () => {
+                if (!audioChunksRef.current.length) return;
+                setWhisperLoading(true);
+                setError('');
+                try {
+                  const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+                  const blob = new Blob(audioChunksRef.current, { type: mimeType });
+                  const form = new FormData();
+                  form.append('audio', blob, 'recording.webm');
+                  const res = await fetch('/api/transcribe', { method: 'POST', body: form });
+                  const data = await res.json();
+                  if (data.text) setTranscript(data.text);
+                  else setError(data.error || 'Whisper 转写失败');
+                } catch {
+                  setError('Whisper 转写失败');
+                }
+                setWhisperLoading(false);
+              }} disabled={whisperLoading}
+                className="w-full py-3 rounded-2xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.35)', color: '#c084fc' }}>
+                {whisperLoading ? <><span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />Whisper 转写中…</> : '🎙️ 用 Whisper 重新转写（更准确）'}
+              </button>
+            )}
             <button onClick={saveRecord}
               className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white text-sm font-semibold transition-all">
               保存到首页 →

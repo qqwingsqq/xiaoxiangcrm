@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function WeChatBlockButton({ wxid, customerName }: { wxid: string; customerName: string }) {
   const [blocked, setBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const block = async () => {
-    if (!confirm(`屏蔽「${customerName}」后，该联系人的新消息将不再自动导入。确认吗？`)) return;
+    if (!confirm(`屏蔽「${customerName}」后，该联系人将从联系人列表消失，且不再收集新消息。确认吗？`)) return;
     setLoading(true);
     await fetch('/api/wechat/blocklist', {
       method: 'POST',
@@ -16,6 +18,8 @@ export default function WeChatBlockButton({ wxid, customerName }: { wxid: string
     });
     setBlocked(true);
     setLoading(false);
+    // 屏蔽后跳转回微信看板
+    setTimeout(() => router.push('/wechat'), 800);
   };
 
   if (blocked) {

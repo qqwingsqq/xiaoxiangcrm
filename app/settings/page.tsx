@@ -513,6 +513,10 @@ export default function SettingsPage() {
   const [aiKeyTesting, setAiKeyTesting] = useState(false);
   const [aiKeyStatus, setAiKeyStatus] = useState<'idle'|'valid'|'invalid'>('idle');
   const [aiKeyError, setAiKeyError] = useState('');
+  const [oaiKey, setOaiKey] = useState('');
+  const [oaiKeySaved, setOaiKeySaved] = useState('');
+  const [oaiKeyEditing, setOaiKeyEditing] = useState(false);
+  const [oaiKeySaving, setOaiKeySaving] = useState(false);
 
   useEffect(() => {
     const fromLocal = (): Profile => ({
@@ -559,10 +563,13 @@ export default function SettingsPage() {
       setPasswordSet(mergedPwSet);
       document.documentElement.setAttribute('data-theme', merged.theme);
       if (data.anthropic_key) { setAiKeySaved(data.anthropic_key); setAiKeyStatus('valid'); }
+      if (data.openai_key) setOaiKeySaved(data.openai_key);
     }).catch(() => {});
     // Also check localStorage
     const localAiKey = localStorage.getItem('crm-anthropic-key') || '';
     if (localAiKey) { setAiKeySaved(localAiKey); setAiKeyStatus('valid'); }
+    const localOaiKey = localStorage.getItem('crm-openai-key') || '';
+    if (localOaiKey) setOaiKeySaved(localOaiKey);
   }, []);
 
   const pwMismatch = !!pwInput && pwInput !== pwConfirm;
@@ -864,6 +871,58 @@ export default function SettingsPage() {
               </div>
               {aiKeyError && <p className="text-xs text-red-400">{aiKeyError}</p>}
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Key 保存后同步到云端，文档上传、语音总结等 AI 功能均使用此 Key</p>
+            </div>
+          )}
+        </Section>
+
+        {/* ── OpenAI API Key (Whisper) ── */}
+        <Section title="OpenAI API Key（语音转写）">
+          {oaiKeySaved && !oaiKeyEditing ? (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>API Key</span>
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />已配置
+                  </span>
+                </div>
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {oaiKeySaved.substring(0, 7)}{'•'.repeat(10)}{oaiKeySaved.slice(-4)}
+                </p>
+              </div>
+              <button onClick={() => { setOaiKey(oaiKeySaved); setOaiKeyEditing(true); }}
+                className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                修改 API Key
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Field label="API Key" hint="在 platform.openai.com → API keys 中获取，用于 Whisper 语音转写">
+                <input value={oaiKeyEditing ? oaiKey : ''} onChange={e => setOaiKey(e.target.value)}
+                  placeholder="sk-proj-..." className={INP_CLS} style={INP_ST} />
+              </Field>
+              <div className="flex gap-2">
+                <button onClick={async () => {
+                  if (!oaiKey.trim()) return;
+                  setOaiKeySaving(true);
+                  await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_key: oaiKey.trim() }) });
+                  setOaiKeySaved(oaiKey.trim());
+                  localStorage.setItem('crm-openai-key', oaiKey.trim());
+                  setOaiKeyEditing(false); setOaiKey('');
+                  setOaiKeySaving(false);
+                }} disabled={oaiKeySaving || !oaiKey.trim()}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                  style={{ background: 'var(--accent)', border: 'none', cursor: oaiKeySaving || !oaiKey.trim() ? 'default' : 'pointer' }}>
+                  {oaiKeySaving ? '保存中…' : '保存'}
+                </button>
+                {oaiKeyEditing && (
+                  <button onClick={() => { setOaiKeyEditing(false); setOaiKey(''); }}
+                    className="px-4 py-2.5 rounded-xl text-sm"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer' }}>取消</button>
+                )}
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>配置后可在录音页面用 Whisper 转写，比浏览器内置识别更准确</p>
             </div>
           )}
         </Section>
