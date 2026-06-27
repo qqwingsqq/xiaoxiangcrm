@@ -11,8 +11,8 @@ export async function POST(req: NextRequest) {
   for (const { wxid, name } of updates) {
     if (!wxid || !name) continue;
     const result = await db.execute({
-      sql: `UPDATE customers SET name = ? WHERE contact_info = ? AND (name = contact_info OR name = ?)`,
-      args: [name, wxid, wxid],
+      sql: `UPDATE customers SET name = ? WHERE contact_info = ?`,
+      args: [name, wxid],
     });
     if ((result.rowsAffected ?? 0) > 0) updated++;
   }
