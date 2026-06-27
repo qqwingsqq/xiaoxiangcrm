@@ -6,6 +6,7 @@ import FollowUps from './FollowUps';
 import WeChatButton from '../WeChatButton';
 import NavButton from './NavButton';
 import WeChatChats from './WeChatChats';
+import WeChatBlockButton from './WeChatBlockButton';
 
 
 function Row({ label, value }: { label: string; value: string | null | undefined }) {
@@ -127,6 +128,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <FollowUps customerId={customer.id} />
       </div>
+
+      {/* 屏蔽按钮（仅微信导入的联系人显示） */}
+      {customer.contact_info && (
+        <WeChatBlockButton wxid={customer.contact_info} customerName={customer.name} />
+      )}
     </div>
   );
 }

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { rows } = await db.execute(`
-    SELECT wc.*, c.name as customer_name, c.contact_name, c.customer_status, c.customer_attribute
+    SELECT wc.*, c.name as customer_name, c.contact_name, c.contact_info as customer_wxid, c.customer_status, c.customer_attribute
     FROM wechat_chats wc
     JOIN customers c ON c.id = wc.customer_id
     ORDER BY wc.created_at DESC

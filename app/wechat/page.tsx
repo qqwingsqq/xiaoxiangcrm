@@ -8,6 +8,7 @@ interface ChatRow {
   customer_id: number;
   customer_name: string;
   contact_name: string | null;
+  customer_wxid: string | null;
   customer_status: string | null;
   raw_content: string;
   summary: string | null;
@@ -19,6 +20,10 @@ interface ChatRow {
   chat_date: string | null;
   created_at: string;
   isNew?: boolean;
+}
+
+function isGroupChat(wxid: string | null) {
+  return wxid?.includes('@chatroom') || wxid?.includes('@im.chatroom');
 }
 
 interface BlocklistItem { id: number; wxid: string; name: string; created_at: string; }
@@ -38,6 +43,7 @@ export default function WeChatDashboard() {
   const [chats, setChats]           = useState<ChatRow[]>([]);
   const [loading, setLoading]       = useState(true);
   const [filter, setFilter]         = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
+  const [chatType, setChatType]     = useState<'all' | 'private' | 'group'>('all');
   const [search, setSearch]         = useState('');
   const [expanded, setExpanded]     = useState<number | null>(null);
   const [newCount, setNewCount]     = useState(0);
@@ -127,6 +133,8 @@ export default function WeChatDashboard() {
   };
 
   const filtered = chats.filter(c => {
+    if (chatType === 'private' && isGroupChat(c.customer_wxid)) return false;
+    if (chatType === 'group' && !isGroupChat(c.customer_wxid)) return false;
     if (filter !== 'all' && c.intent_level !== filter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -194,6 +202,30 @@ export default function WeChatDashboard() {
             ← 返回
           </Link>
         </div>
+      </div>
+
+      {/* 类型切换 */}
+      <div className="flex gap-2">
+        {([
+          { key: 'all',     label: '全部',     icon: '💬' },
+          { key: 'private', label: '联系人',   icon: '👤' },
+          { key: 'group',   label: '微信群',   icon: '👥' },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setChatType(t.key)}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+            style={{
+              background: chatType === t.key ? 'rgba(96,165,250,0.15)' : 'var(--bg-input)',
+              color: chatType === t.key ? '#60a5fa' : 'var(--text-muted)',
+              border: `1px solid ${chatType === t.key ? '#60a5fa' : 'var(--border)'}`,
+            }}>
+            <span>{t.icon}</span>{t.label}
+            <span className="ml-1 text-[10px] opacity-60">
+              {t.key === 'all' ? chats.length
+                : t.key === 'private' ? chats.filter(c => !isGroupChat(c.customer_wxid)).length
+                : chats.filter(c => isGroupChat(c.customer_wxid)).length}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Stats */}
