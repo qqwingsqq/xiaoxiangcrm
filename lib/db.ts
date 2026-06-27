@@ -132,6 +132,12 @@ export async function ensureDb(): Promise<Client> {
       )`,
     ], 'write');
     // Migrations
+    try { await db.execute(`CREATE TABLE IF NOT EXISTS wechat_blocklist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      wxid TEXT NOT NULL UNIQUE,
+      name TEXT,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )`); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN wechat_id TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN map_lat REAL'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN map_lng REAL'); } catch (_) {}
