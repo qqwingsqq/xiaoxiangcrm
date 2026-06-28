@@ -40,14 +40,15 @@ export async function POST(req: NextRequest) {
   {"type":"follow_up","customer_name":"客户名","title":"跟进标题","content":"具体内容","date":"YYYY-MM-DD或null"}
 - schedule：添加日程（会议、拜访、展会等）
   {"type":"schedule","title":"日程标题","date":"YYYY-MM-DD","time":"HH:MM或null","description":"备注"}
-- reminder：设置提醒（后续跟进、到期提醒等）
-  {"type":"reminder","customer_name":"客户名或null","content":"提醒内容","date":"YYYY-MM-DD或null"}
+- reminder：设置提醒（仅当明确提到客户列表中某个客户名时使用）
+  {"type":"reminder","customer_name":"客户名","content":"提醒内容","date":"YYYY-MM-DD或null"}
 - none：普通对话
   {"type":"none"}
 
 规则：
 - 相对日期（明天、下周五等）请计算成具体日期
 - 如果用户提到客户名，优先从客户列表中匹配，保持原始说法
+- 如果用户说"提醒我去见客户"、"提醒我联系一下"等，但未指明客户列表里的具体客户名，请使用schedule类型而不是reminder类型
 - 每条消息只返回一个[ACTION]
 - [ACTION]内只能是有效JSON，不要换行注释`;
 

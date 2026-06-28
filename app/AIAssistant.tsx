@@ -42,7 +42,7 @@ function ActionSuggestionCard({ action, customers, onSave, onSkip }: {
     }
   }, [action.customer_name, customers]);
 
-  const needsCustomer = action.type === 'follow_up' || action.type === 'reminder';
+  const needsCustomer = action.type === 'follow_up';
 
   const cfgMap: Record<string, { icon: string; label: string; color: string; bg: string; border: string }> = {
     schedule:  { icon: '📅', label: '加入日程', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.3)' },
@@ -72,10 +72,10 @@ function ActionSuggestionCard({ action, customers, onSave, onSkip }: {
         {action.date && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>🕐 {action.date}{action.time ? ` ${action.time}` : ''}</div>}
         {action.customer_name && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>👤 {action.customer_name}</div>}
       </div>
-      {needsCustomer && customers.length > 0 && (
+      {(needsCustomer || action.type === 'reminder') && customers.length > 0 && (
         <select value={customerId} onChange={e => setCustomerId(Number(e.target.value) || '')}
           style={{ width: '100%', marginBottom: 8, padding: '5px 8px', borderRadius: 7, fontSize: 12, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-          <option value="">— 选择关联客户 —</option>
+          <option value="">{action.type === 'reminder' ? '— 可选：关联客户 —' : '— 选择关联客户 —'}</option>
           {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       )}
@@ -244,11 +244,19 @@ export default function AIAssistant() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: action.title || '日程', event_date: action.date, event_time: action.time || null, description: action.description || '' }),
       });
-    } else if (action.type === 'reminder' && customerId) {
-      await fetch('/api/reminders', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_id: customerId, content: action.content || action.title || '提醒', remind_date: action.date || null }),
-      });
+    } else if (action.type === 'reminder') {
+      if (customerId) {
+        await fetch('/api/reminders', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer_id: customerId, content: action.content || action.title || '提醒', remind_date: action.date || null }),
+        });
+      } else {
+        // 没有关联客户时，保存为日程
+        await fetch('/api/calendar-events', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: action.content || action.title || '提醒', event_date: action.date || new Date().toISOString().substring(0, 10), event_time: null, description: '' }),
+        });
+      }
     }
     setMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, actionState: 'saved' } : m));
   };
