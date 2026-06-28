@@ -178,14 +178,21 @@ function PendingContactsModal({
     const name = renameVal[contact.id]?.trim();
     if (!name) return;
     setWorking(prev => ({ ...prev, [contact.id]: true }));
-    await fetch('/api/wechat/link-contact', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ action: 'rename', customer_id: contact.id, name }),
-    });
-    setContacts(prev => prev.filter(c => c.id !== contact.id));
-    setWorking(prev => ({ ...prev, [contact.id]: false }));
-    onDone();
+    try {
+      const res = await fetch('/api/wechat/link-contact', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: 'rename', customer_id: contact.id, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(`保存失败：${data.error || res.status}`); return; }
+      setContacts(prev => prev.filter(c => c.id !== contact.id));
+      onDone();
+    } catch (e) {
+      alert(`网络错误：${e}`);
+    } finally {
+      setWorking(prev => ({ ...prev, [contact.id]: false }));
+    }
   };
 
   const inputCls = 'w-full px-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';

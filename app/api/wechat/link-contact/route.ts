@@ -58,10 +58,12 @@ export async function POST(req: NextRequest) {
     if (!customer_id || !name)
       return NextResponse.json({ error: 'customer_id and name required' }, { status: 400 });
 
-    await db.execute({
+    const result = await db.execute({
       sql:  'UPDATE customers SET name = ? WHERE id = ?',
-      args: [name, customer_id],
+      args: [name, Number(customer_id)],
     });
+    if ((result.rowsAffected ?? 0) === 0)
+      return NextResponse.json({ error: `未找到客户 id=${customer_id}` }, { status: 404 });
     return NextResponse.json({ ok: true, action: 'renamed' });
   }
 
