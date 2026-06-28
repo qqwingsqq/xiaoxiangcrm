@@ -20,6 +20,8 @@ interface ChatRow {
   analysis_status: string;
   chat_date: string | null;
   created_at: string;
+  total_chats?: number;
+  latest_date?: string | null;
   isNew?: boolean;
 }
 
@@ -56,11 +58,20 @@ function parseJson(s: string, fallback: string[] = []): string[] {
 function isGroupChat(wxid: string | null) {
   return wxid?.includes('@chatroom') || wxid?.includes('@im.chatroom');
 }
-function bestName(chat: ChatRow): string {
-  const hasChinese = (s: string) => /[一-鿿]/.test(s);
-  if (hasChinese(chat.customer_name)) return chat.customer_name;
-  if (chat.contact_name && hasChinese(chat.contact_name)) return chat.contact_name;
+// 主名：优先用联系人姓名（contact_name），无则用客户名
+function primaryName(chat: ChatRow): string {
+  if (chat.contact_name && chat.contact_name.trim()) return chat.contact_name.trim();
   return chat.customer_name;
+}
+// 副名：如果主名是 contact_name，副名显示客户/公司名（customer_name）
+function secondaryName(chat: ChatRow): string | null {
+  if (chat.contact_name && chat.contact_name.trim() && chat.contact_name.trim() !== chat.customer_name) {
+    return chat.customer_name;
+  }
+  // customer_name 看起来是 wxid 时不显示副名
+  const hasChinese = (s: string) => /[一-鿿]/.test(s);
+  if (!hasChinese(chat.customer_name)) return null;
+  return null;
 }
 
 // ── ChatPreview（待关联弹窗里的聊天快照）────────────────────────
@@ -401,9 +412,10 @@ export default function WeChatDashboard() {
     if (filter !== 'all' && c.intent_level !== filter) return false;
     if (search) {
       const q = search.toLowerCase();
-      return c.customer_name.toLowerCase().includes(q) ||
-        (c.summary || '').toLowerCase().includes(q) ||
-        (c.contact_name || '').toLowerCase().includes(q);
+      return primaryName(c).toLowerCase().includes(q) ||
+        c.customer_name.toLowerCase().includes(q) ||
+        (c.contact_name || '').toLowerCase().includes(q) ||
+        (c.summary || '').toLowerCase().includes(q);
     }
     return true;
   });
@@ -582,12 +594,14 @@ export default function WeChatDashboard() {
                 <div className="grid grid-cols-12 gap-3 px-4 py-3 items-start">
                   <div className="col-span-12 sm:col-span-2">
                     <Link href={`/customers/${chat.customer_id}`}
-                      className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">
-                      {bestName(chat)}
+                      className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors block truncate">
+                      {primaryName(chat)}
                     </Link>
-                    {/* 若 customer_name 和 bestName 不同，显示原始 wxid 作为副标题 */}
-                    {bestName(chat) !== chat.customer_name && (
-                      <p className="text-xs text-zinc-600 truncate">{chat.customer_name}</p>
+                    {secondaryName(chat) && (
+                      <p className="text-xs text-zinc-500 truncate">{secondaryName(chat)}</p>
+                    )}
+                    {(chat.total_chats ?? 0) > 1 && (
+                      <p className="text-[10px] text-zinc-700">{chat.total_chats} 次记录</p>
                     )}
                   </div>
                   <div className="col-span-4 sm:col-span-1">
