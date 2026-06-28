@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useDevice } from '../DevicePreviewProvider';
 
 type Theme = 'dark' | 'light' | 'system';
@@ -493,6 +494,60 @@ function AmapKeyModal({ current, currentSec, onSave, onClose }: {
   );
 }
 
+// ── Account section ───────────────────────────────────────
+interface AccountInfo { id: number; username: string; display_name: string | null }
+
+function AccountSection() {
+  const router = useRouter();
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.id) setAccount(data); })
+      .catch(() => {});
+  }, []);
+
+  const logout = async () => {
+    setLoggingOut(true);
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+    router.refresh();
+  };
+
+  const label = account?.display_name || account?.username || '加载中…';
+  const initial = label[0]?.toUpperCase() || '?';
+
+  return (
+    <div className="rounded-2xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+      <p className="text-xs font-semibold mb-4 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>当前账户</p>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-base font-bold flex-shrink-0"
+          style={{ background: 'var(--accent)', color: '#fff' }}>
+          {initial}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{label}</p>
+          {account?.display_name && (
+            <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>@{account.username}</p>
+          )}
+        </div>
+        <button
+          onClick={logout}
+          disabled={loggingOut}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium flex-shrink-0 disabled:opacity-50"
+          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}>
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          {loggingOut ? '退出中…' : '退出账户'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main settings page ────────────────────────────────────
 export default function SettingsPage() {
   const { device } = useDevice();
@@ -662,6 +717,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+
+        {/* ── Account ── */}
+        <AccountSection />
 
         {/* ── Profile card / edit form ── */}
         {!editing ? (

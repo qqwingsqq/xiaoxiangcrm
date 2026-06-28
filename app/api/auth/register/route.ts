@@ -12,12 +12,6 @@ export async function POST(req: NextRequest) {
   }
 
   const db = await ensureDb();
-  const { rows: existing } = await db.execute('SELECT COUNT(*) as cnt FROM users');
-  const count = existing[0]?.cnt as number;
-  if (count > 0) {
-    return NextResponse.json({ error: '注册已关闭，请联系管理员' }, { status: 403 });
-  }
-
   const normalizedUsername = username.trim().toLowerCase();
   const passwordHash = hashPassword(password);
 
@@ -31,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       ok: true,
-      user: { id: userId, username: normalizedUsername, display_name: display_name || normalizedUsername },
+      user: { id: userId, username: normalizedUsername, display_name: display_name?.trim() || normalizedUsername },
     }, { status: 201 });
     res.cookies.set('crm_session', token, {
       httpOnly: true,

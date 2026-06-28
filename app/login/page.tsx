@@ -2,7 +2,6 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -72,7 +71,7 @@ export default function LoginPage() {
                 background: mode === 'login' ? 'var(--accent)' : 'transparent',
                 color: mode === 'login' ? '#fff' : 'var(--text-muted)',
               }}>
-              登录
+              登录账户
             </button>
             <button
               type="button"
@@ -82,7 +81,7 @@ export default function LoginPage() {
                 background: mode === 'register' ? 'var(--accent)' : 'transparent',
                 color: mode === 'register' ? '#fff' : 'var(--text-muted)',
               }}>
-              首次注册
+              创建新账户
             </button>
           </div>
 
@@ -97,12 +96,8 @@ export default function LoginPage() {
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
                   placeholder="例：张三"
-                  className="w-full px-3 py-2 rounded-lg text-sm border outline-none focus:ring-2"
-                  style={{
-                    background: 'var(--bg-input)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--text-primary)',
-                  }}
+                  className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 />
               </div>
             )}
@@ -117,12 +112,8 @@ export default function LoginPage() {
                 placeholder="请输入用户名"
                 required
                 autoComplete="username"
-                className="w-full px-3 py-2 rounded-lg text-sm border outline-none focus:ring-2"
-                style={{
-                  background: 'var(--bg-input)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-primary)',
-                }}
+                className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
             </div>
             <div>
@@ -136,12 +127,8 @@ export default function LoginPage() {
                 placeholder={mode === 'register' ? '至少6位' : '请输入密码'}
                 required
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                className="w-full px-3 py-2 rounded-lg text-sm border outline-none focus:ring-2"
-                style={{
-                  background: 'var(--bg-input)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-primary)',
-                }}
+                className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
               />
             </div>
 
@@ -156,15 +143,9 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-2.5 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-50"
               style={{ background: 'var(--accent)', color: '#fff' }}>
-              {loading ? '请稍候...' : mode === 'login' ? '登录' : '注册并登录'}
+              {loading ? '请稍候...' : mode === 'login' ? '登录' : '创建账户并登录'}
             </button>
           </form>
-
-          {mode === 'register' && (
-            <p className="text-xs mt-4 text-center" style={{ color: 'var(--text-muted)' }}>
-              注册仅在系统没有任何账户时可用
-            </p>
-          )}
         </div>
       </div>
     </div>
