@@ -34,20 +34,14 @@ export async function GET(req: NextRequest) {
     FROM wechat_chats wc
     JOIN customers c ON c.id = wc.customer_id
     WHERE (c.is_blocked = 0 OR c.is_blocked IS NULL)
-      -- 每个客户只取最新一条（intent_level 优先热/暖，其次按日期）
+      -- 每个客户只取最新一条（按聊天日期最近）
       AND wc.id = (
         SELECT w4.id FROM wechat_chats w4
         WHERE w4.customer_id = wc.customer_id
-        ORDER BY
-          CASE w4.intent_level WHEN 'hot' THEN 0 WHEN 'warm' THEN 1 ELSE 2 END,
-          w4.chat_date DESC,
-          w4.created_at DESC
+        ORDER BY w4.chat_date DESC, w4.created_at DESC
         LIMIT 1
       )
-    ORDER BY
-      CASE wc.intent_level WHEN 'hot' THEN 0 WHEN 'warm' THEN 1 ELSE 2 END,
-      latest_date DESC,
-      wc.created_at DESC
+    ORDER BY latest_date DESC, wc.created_at DESC
   `);
   return NextResponse.json(rows);
 }
