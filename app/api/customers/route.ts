@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb, CustomerInput } from '@/lib/db';
+import { requireSession, getMonitorUserId, getSessionUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
+  const userId = getMonitorUserId(request) ?? getSessionUser(request)?.id;
+  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
   const { searchParams } = new URL(request.url);
   const search = searchParams.get('search') || '';
   const type = searchParams.get('type') || '';
@@ -9,8 +13,8 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status') || '';
 
   const db = await ensureDb();
-  let sql = 'SELECT * FROM customers WHERE (is_blocked = 0 OR is_blocked IS NULL)';
-  const args: string[] = [];
+  let sql = 'SELECT * FROM customers WHERE (is_blocked = 0 OR is_blocked IS NULL) AND (user_id = ? OR user_id IS NULL)';
+  const args: (string | number)[] = [userId];
 
   if (search) { sql += ' AND name LIKE ?'; args.push(`%${search}%`); }
   if (type) { sql += ' AND type = ?'; args.push(type); }
@@ -23,6 +27,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let sessionUserId: number;
+  try { sessionUserId = requireSession(request).id; } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
   const body: CustomerInput = await request.json();
 
   if (!body.name?.trim()) return NextResponse.json({ error: '客户名称不能为空' }, { status: 400 });
@@ -31,11 +40,11 @@ export async function POST(request: NextRequest) {
 
   const db = await ensureDb();
   const result = await db.execute({
-    sql: `INSERT INTO customers (name, type, customer_attribute, customer_status, address, contact_name, contact_info, wechat_id, tags)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO customers (name, type, customer_attribute, customer_status, address, contact_name, contact_info, wechat_id, tags, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       body.name.trim(),
-      body.customer_attribute, // keep type in sync for backward compat
+      body.customer_attribute,
       body.customer_attribute,
       body.customer_status,
       body.address?.trim() || null,
@@ -43,6 +52,7 @@ export async function POST(request: NextRequest) {
       body.contact_info?.trim() || null,
       body.wechat_id?.trim() || null,
       JSON.stringify(body.tags || []),
+      sessionUserId,
     ],
   });
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 import Anthropic from '@anthropic-ai/sdk';
 
 async function analyzeWechatChat(content: string, apiKey?: string) {
@@ -33,9 +34,21 @@ ${content.substring(0, 6000)}
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const since  = req.nextUrl.searchParams.get('since');
   const db     = await ensureDb();
+
+  // Verify customer ownership
+  const { rows: owns } = await db.execute({
+    sql: 'SELECT id FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+    args: [id, session.id],
+  });
+  if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+
   const { rows } = await db.execute(since ? {
     sql:  'SELECT * FROM wechat_chats WHERE customer_id = ? AND created_at > ? ORDER BY created_at DESC',
     args: [id, since],
@@ -47,11 +60,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const { raw_content, chat_date, auto_analyze } = await req.json();
   if (!raw_content?.trim()) return NextResponse.json({ error: '聊天内容不能为空' }, { status: 400 });
 
   const db = await ensureDb();
+
+  const { rows: owns } = await db.execute({
+    sql: 'SELECT id FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+    args: [id, session.id],
+  });
+  if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+
   const { rows: [{ last_id }] } = await db.execute({
     sql: `INSERT INTO wechat_chats (customer_id, raw_content, chat_date, analysis_status)
           VALUES (?, ?, ?, 'pending') RETURNING id as last_id`,

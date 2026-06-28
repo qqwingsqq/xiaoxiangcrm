@@ -3,6 +3,7 @@ import './globals.css';
 import { DevicePreviewProvider, DevicePreviewBar, DevicePreviewWrapper } from './DevicePreviewProvider';
 import NavLinks from './NavLinks';
 import PWAInit from './PWAInit';
+import UserMenu from './UserMenu';
 
 export const metadata: Metadata = {
   title: '小象智能 · 客户管理',
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </a>
+                <UserMenu />
                 <DevicePreviewBar />
               </div>
             </div>

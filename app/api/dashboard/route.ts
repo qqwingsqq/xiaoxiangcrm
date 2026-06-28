@@ -1,7 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  const uid = session.id;
+
   const db = await ensureDb();
 
   const [
@@ -13,33 +20,40 @@ export async function GET() {
     { rows: customersByType },
     { rows: recentCustomers },
   ] = await Promise.all([
-    db.execute({ sql: `SELECT type, COUNT(*) as count FROM customers GROUP BY type`, args: [] }),
-    db.execute({ sql: `SELECT COUNT(*) as n FROM customers`, args: [] }),
+    db.execute({
+      sql: `SELECT type, COUNT(*) as count FROM customers WHERE (user_id = ? OR user_id IS NULL) GROUP BY type`,
+      args: [uid],
+    }),
+    db.execute({
+      sql: `SELECT COUNT(*) as n FROM customers WHERE (user_id = ? OR user_id IS NULL)`,
+      args: [uid],
+    }),
     db.execute({
       sql: `SELECT f.*, c.name as customer_name, c.type as customer_type
             FROM follow_ups f JOIN customers c ON f.customer_id = c.id
+            WHERE (c.user_id = ? OR c.user_id IS NULL)
             ORDER BY f.created_at DESC LIMIT 5`,
-      args: [],
+      args: [uid],
     }),
     db.execute({
       sql: `SELECT r.*, c.name as customer_name
             FROM reminders r JOIN customers c ON r.customer_id = c.id
-            WHERE r.is_done = 0
+            WHERE r.is_done = 0 AND (c.user_id = ? OR c.user_id IS NULL)
             ORDER BY CASE WHEN r.remind_date IS NULL THEN 1 ELSE 0 END, r.remind_date ASC
             LIMIT 10`,
-      args: [],
+      args: [uid],
     }),
     db.execute({
-      sql: `SELECT id, name, type, address FROM customers WHERE address IS NOT NULL AND address != ''`,
-      args: [],
+      sql: `SELECT id, name, type, address FROM customers WHERE address IS NOT NULL AND address != '' AND (user_id = ? OR user_id IS NULL)`,
+      args: [uid],
     }),
     db.execute({
-      sql: `SELECT type, COUNT(*) as count FROM customers GROUP BY type ORDER BY count DESC`,
-      args: [],
+      sql: `SELECT type, COUNT(*) as count FROM customers WHERE (user_id = ? OR user_id IS NULL) GROUP BY type ORDER BY count DESC`,
+      args: [uid],
     }),
     db.execute({
-      sql: `SELECT id, name, type, contact_name, contact_info, created_at FROM customers ORDER BY created_at DESC LIMIT 6`,
-      args: [],
+      sql: `SELECT id, name, type, contact_name, contact_info, created_at FROM customers WHERE (user_id = ? OR user_id IS NULL) ORDER BY created_at DESC LIMIT 6`,
+      args: [uid],
     }),
   ]);
 

@@ -131,6 +131,14 @@ export async function ensureDb(): Promise<Client> {
         created_at TEXT DEFAULT (datetime('now','localtime'))
       )`,
     ], 'write');
+    // Users table for multi-user auth
+    try { await db.execute(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    )`); } catch (_) {}
     // Migrations
     try { await db.execute(`CREATE TABLE IF NOT EXISTS wechat_blocklist (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,6 +152,7 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE customers ADD COLUMN map_lng REAL'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN customer_attribute TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN customer_status TEXT'); } catch (_) {}
+    try { await db.execute('ALTER TABLE customers ADD COLUMN user_id INTEGER DEFAULT 1'); } catch (_) {}
     // Seed default customer types if empty
     const { rows } = await db.execute('SELECT COUNT(*) as cnt FROM customer_types');
     if ((rows[0]?.cnt as number) === 0) {

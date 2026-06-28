@@ -1,17 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb, CustomerInput } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Params) {
+async function checkOwnership(db: Awaited<ReturnType<typeof ensureDb>>, customerId: string, userId: number) {
+  const { rows } = await db.execute({
+    sql: 'SELECT id FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+    args: [customerId, userId],
+  });
+  return rows.length > 0;
+}
+
+export async function GET(req: NextRequest, { params }: Params) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const db = await ensureDb();
-  const { rows } = await db.execute({ sql: 'SELECT * FROM customers WHERE id = ?', args: [id] });
+  const { rows } = await db.execute({
+    sql: 'SELECT * FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+    args: [id, session.id],
+  });
   if (!rows[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
   return NextResponse.json(rows[0]);
 }
 
 export async function PUT(request: NextRequest, { params }: Params) {
+  let session;
+  try { session = requireSession(request); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const body: CustomerInput = await request.json();
 
@@ -20,8 +40,9 @@ export async function PUT(request: NextRequest, { params }: Params) {
   if (!body.customer_status) return NextResponse.json({ error: '请选择客户状态' }, { status: 400 });
 
   const db = await ensureDb();
-  const { rows: exists } = await db.execute({ sql: 'SELECT id FROM customers WHERE id = ?', args: [id] });
-  if (!exists[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+  if (!await checkOwnership(db, id, session.id)) {
+    return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+  }
 
   await db.execute({
     sql: `UPDATE customers SET name=?, type=?, customer_attribute=?, customer_status=?,
@@ -46,11 +67,16 @@ export async function PUT(request: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
+  let session;
+  try { session = requireSession(request); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const body = await request.json();
   const db = await ensureDb();
-  const { rows: exists } = await db.execute({ sql: 'SELECT id FROM customers WHERE id = ?', args: [id] });
-  if (!exists[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+  if (!await checkOwnership(db, id, session.id)) {
+    return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+  }
 
   const updates: string[] = [];
   const args: (number | null)[] = [];
@@ -65,11 +91,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const db = await ensureDb();
-  const { rows: exists } = await db.execute({ sql: 'SELECT id FROM customers WHERE id = ?', args: [id] });
-  if (!exists[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+  if (!await checkOwnership(db, id, session.id)) {
+    return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+  }
   await db.execute({ sql: 'DELETE FROM customers WHERE id = ?', args: [id] });
   return NextResponse.json({ success: true });
 }

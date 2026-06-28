@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
+import { getMonitorUserId, getSessionUser } from '@/lib/auth';
 
 interface MessageItem {
-  date: string;       // YYYY-MM-DD
-  content: string;    // formatted chat log for this day
+  date: string;
+  content: string;
   msg_count: number;
 }
 
@@ -14,10 +15,14 @@ interface SessionImport {
 }
 
 export async function POST(req: NextRequest) {
-  const secret = req.headers.get('x-import-secret');
-  if (secret !== process.env.IMPORT_SECRET && process.env.IMPORT_SECRET) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  // Accept X-Api-Key (monitor) or session or legacy x-import-secret
+  const monitorId = getMonitorUserId(req);
+  const sessionId = getSessionUser(req)?.id;
+  const legacySecret = req.headers.get('x-import-secret');
+  const legacyOk = legacySecret && legacySecret === process.env.IMPORT_SECRET;
+
+  const userId = monitorId ?? sessionId ?? (legacyOk ? 1 : null);
+  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const { sessions } = await req.json() as { sessions: SessionImport[] };
   if (!Array.isArray(sessions) || sessions.length === 0) {
@@ -30,10 +35,9 @@ export async function POST(req: NextRequest) {
   for (const session of sessions) {
     if (!session.wxid || !session.messages?.length) continue;
 
-    // Find customer by wxid (stored in contact_info) or by name
     let { rows } = await db.execute({
-      sql: `SELECT id FROM customers WHERE contact_info = ? OR (contact_info LIKE ? AND name = ?) LIMIT 1`,
-      args: [session.wxid, `%${session.wxid}%`, session.name],
+      sql: `SELECT id FROM customers WHERE (contact_info = ? OR (contact_info LIKE ? AND name = ?)) AND (user_id = ? OR user_id IS NULL) LIMIT 1`,
+      args: [session.wxid, `%${session.wxid}%`, session.name, userId],
     });
 
     let customerId: number;
@@ -42,14 +46,13 @@ export async function POST(req: NextRequest) {
       results.skipped_customers++;
     } else {
       const insert = await db.execute({
-        sql: `INSERT INTO customers (name, type, contact_info, tags) VALUES (?, '个人客户', ?, '["微信导入"]') RETURNING id`,
-        args: [session.name || session.wxid, session.wxid],
+        sql: `INSERT INTO customers (name, type, contact_info, tags, user_id) VALUES (?, '个人客户', ?, '["微信导入"]', ?) RETURNING id`,
+        args: [session.name || session.wxid, session.wxid, userId],
       });
       customerId = insert.rows[0].id as number;
       results.created_customers++;
     }
 
-    // Insert chat records per day
     for (const msg of session.messages) {
       const exists = await db.execute({
         sql: `SELECT id FROM wechat_chats WHERE customer_id = ? AND chat_date = ?`,

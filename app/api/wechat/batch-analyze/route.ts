@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 import Anthropic from '@anthropic-ai/sdk';
 
 async function analyzeChat(content: string, apiKey: string) {
@@ -30,21 +31,35 @@ ${content.substring(0, 4000)}
   return JSON.parse(raw.text.replace(/```json\n?|\n?```/g, '').trim());
 }
 
-// GET: 查询待分析数量
-export async function GET() {
+export async function GET(req: NextRequest) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const db = await ensureDb();
-  const { rows } = await db.execute(
-    `SELECT COUNT(*) as cnt FROM wechat_chats WHERE analysis_status = 'pending'`
-  );
-  const total = await db.execute(`SELECT COUNT(*) as cnt FROM wechat_chats`);
+  const { rows } = await db.execute({
+    sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
+          JOIN customers c ON c.id = wc.customer_id
+          WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)`,
+    args: [session.id],
+  });
+  const total = await db.execute({
+    sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
+          JOIN customers c ON c.id = wc.customer_id
+          WHERE (c.user_id = ? OR c.user_id IS NULL)`,
+    args: [session.id],
+  });
   return NextResponse.json({
     pending: rows[0].cnt,
     total: total.rows[0].cnt,
   });
 }
 
-// POST: 批量分析一批（每次处理 batch_size 条）
 export async function POST(req: NextRequest) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { batch_size = 10 } = await req.json().catch(() => ({}));
 
   const db = await ensureDb();
@@ -55,8 +70,11 @@ export async function POST(req: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: '未配置 API Key' }, { status: 500 });
 
   const { rows: pending } = await db.execute({
-    sql: `SELECT id, raw_content FROM wechat_chats WHERE analysis_status = 'pending' LIMIT ?`,
-    args: [batch_size],
+    sql: `SELECT wc.id, wc.raw_content FROM wechat_chats wc
+          JOIN customers c ON c.id = wc.customer_id
+          WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)
+          LIMIT ?`,
+    args: [session.id, batch_size],
   });
 
   if (pending.length === 0) {
@@ -95,9 +113,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const { rows: [remaining] } = await db.execute(
-    `SELECT COUNT(*) as cnt FROM wechat_chats WHERE analysis_status = 'pending'`
-  );
+  const { rows: [remaining] } = await db.execute({
+    sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
+          JOIN customers c ON c.id = wc.customer_id
+          WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)`,
+    args: [session.id],
+  });
 
   return NextResponse.json({
     done: (remaining.cnt as number) === 0,
