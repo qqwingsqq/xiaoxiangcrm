@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'customer_id and name required' }, { status: 400 });
 
     await db.execute({
-      sql:  "UPDATE customers SET name = ?, tags = json_set(COALESCE(tags,'[]'), '$[#]', '微信联系人') WHERE id = ?",
+      sql:  'UPDATE customers SET name = ? WHERE id = ?',
       args: [name, customer_id],
     });
     return NextResponse.json({ ok: true, action: 'renamed' });
