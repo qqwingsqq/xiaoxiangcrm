@@ -432,18 +432,6 @@ export default function WeChatDashboard() {
         </div>
       )}
 
-      {/* Pending contacts banner */}
-      {pendingCount > 0 && (
-        <button onClick={() => setShowPending(true)}
-          className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-colors hover:opacity-90"
-          style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.35)', color: '#fbbf24' }}>
-          <span className="flex items-center gap-2">
-            <span>⚠️</span>
-            有 {pendingCount} 个微信联系人未关联客户，点击处理
-          </span>
-          <span className="text-xs">→</span>
-        </button>
-      )}
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
