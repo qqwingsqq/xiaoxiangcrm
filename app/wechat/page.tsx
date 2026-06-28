@@ -54,6 +54,12 @@ function parseJson(s: string, fallback: string[] = []): string[] {
 function isGroupChat(wxid: string | null) {
   return wxid?.includes('@chatroom') || wxid?.includes('@im.chatroom');
 }
+function bestName(chat: ChatRow): string {
+  const hasChinese = (s: string) => /[一-鿿]/.test(s);
+  if (hasChinese(chat.customer_name)) return chat.customer_name;
+  if (chat.contact_name && hasChinese(chat.contact_name)) return chat.contact_name;
+  return chat.customer_name;
+}
 
 // ── PendingContactsModal ──────────────────────────────────────
 function PendingContactsModal({
@@ -548,9 +554,12 @@ export default function WeChatDashboard() {
                   <div className="col-span-12 sm:col-span-2">
                     <Link href={`/customers/${chat.customer_id}`}
                       className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">
-                      {chat.customer_name}
+                      {bestName(chat)}
                     </Link>
-                    {chat.contact_name && <p className="text-xs text-zinc-600">{chat.contact_name}</p>}
+                    {/* 若 customer_name 和 bestName 不同，显示原始 wxid 作为副标题 */}
+                    {bestName(chat) !== chat.customer_name && (
+                      <p className="text-xs text-zinc-600 truncate">{chat.customer_name}</p>
+                    )}
                   </div>
                   <div className="col-span-4 sm:col-span-1">
                     <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: intent.bg, color: intent.color }}>
