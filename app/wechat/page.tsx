@@ -29,6 +29,8 @@ interface PendingContact {
   contact_info: string;
   chat_count: number;
   created_at: string;
+  latest_chat: string | null;
+  latest_date: string | null;
 }
 
 interface CustomerSearchResult {
@@ -59,6 +61,41 @@ function bestName(chat: ChatRow): string {
   if (hasChinese(chat.customer_name)) return chat.customer_name;
   if (chat.contact_name && hasChinese(chat.contact_name)) return chat.contact_name;
   return chat.customer_name;
+}
+
+// ── ChatPreview（待关联弹窗里的聊天快照）────────────────────────
+function ChatPreview({ raw }: { raw: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = raw.split('\n').filter(l => l.trim()).slice(0, expanded ? 30 : 6);
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ background: '#0f0f11', border: '1px solid #222' }}>
+      <div className="px-3 py-2 space-y-1">
+        {lines.map((line, i) => {
+          const m = line.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(我|对方)[:：]\s*(.+)$/);
+          if (m) {
+            const isMe = m[2] === '我';
+            return (
+              <div key={i} className={`flex gap-1.5 ${isMe ? 'flex-row-reverse' : ''}`}>
+                <span className="text-[10px] flex-shrink-0 mt-0.5" style={{ color: isMe ? '#60a5fa' : '#4ade80' }}>
+                  {isMe ? '我' : '他'}
+                </span>
+                <span className="text-xs text-zinc-300 leading-relaxed">{m[3]}</span>
+                <span className="text-[10px] text-zinc-700 flex-shrink-0 mt-0.5">{m[1]}</span>
+              </div>
+            );
+          }
+          return <p key={i} className="text-xs text-zinc-600">{line}</p>;
+        })}
+      </div>
+      {raw.split('\n').filter(l => l.trim()).length > 6 && (
+        <button onClick={() => setExpanded(e => !e)}
+          className="w-full py-1 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors border-t"
+          style={{ borderColor: '#222' }}>
+          {expanded ? '收起' : `展开全部 ${raw.split('\n').filter(l=>l.trim()).length} 条`}
+        </button>
+      )}
+    </div>
+  );
 }
 
 // ── PendingContactsModal ──────────────────────────────────────
@@ -158,11 +195,11 @@ function PendingContactsModal({
               <div key={contact.id} className="rounded-xl p-4 space-y-3"
                 style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
 
-                {/* Contact info */}
+                {/* Contact info + chat preview */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{contact.contact_info}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{contact.chat_count} 条聊天记录 · {contact.created_at.substring(0, 10)}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-zinc-400 truncate">{contact.contact_info}</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">{contact.chat_count} 条聊天 · {(contact.latest_date || contact.created_at).substring(0, 10)}</p>
                   </div>
                   {m === 'idle' && (
                     <div className="flex gap-1.5 flex-shrink-0">
@@ -179,6 +216,10 @@ function PendingContactsModal({
                     </div>
                   )}
                 </div>
+                {/* Chat preview — always visible so user can identify who this is */}
+                {contact.latest_chat && (
+                  <ChatPreview raw={contact.latest_chat} />
+                )}
 
                 {/* Link mode: search existing customer */}
                 {m === 'link' && (

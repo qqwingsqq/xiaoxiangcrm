@@ -62,30 +62,41 @@ function ChatViewer({
 }: {
   raw: string;
   highlightIdx: number | null;
-  scrollTrigger: number; // increments each time we want a new scroll
+  scrollTrigger: number;
 }) {
-  const lines    = parseLines(raw);
-  const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const lines        = parseLines(raw);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll whenever scrollTrigger changes (even if highlightIdx is the same value)
+  // 每次 scrollTrigger 变化（即用户点击要点）→ 滚动到高亮行
   useEffect(() => {
-    if (highlightIdx === null) return;
-    // Give DOM a tick to paint before scrolling
-    requestAnimationFrame(() => {
-      const el = lineRefs.current[highlightIdx];
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+    if (highlightIdx === null || !containerRef.current) return;
+    // setTimeout 确保新挂载的 ChatViewer DOM 完全绘制后再滚动
+    const t = setTimeout(() => {
+      const container = containerRef.current;
+      if (!container) return;
+      const el = container.querySelector<HTMLElement>(`[data-line="${highlightIdx}"]`);
+      if (!el) return;
+      // 手动计算偏移，在 overflow 容器内滚动
+      const containerTop  = container.scrollTop;
+      const containerH    = container.clientHeight;
+      const elTop         = el.offsetTop;
+      const elH           = el.offsetHeight;
+      const target        = elTop - containerH / 2 + elH / 2;
+      container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    }, 80);
+    return () => clearTimeout(t);
   }, [scrollTrigger, highlightIdx]);
 
   return (
-    <div className="overflow-y-auto max-h-80 px-3 py-2 space-y-1.5 rounded-xl"
+    <div ref={containerRef}
+      className="overflow-y-auto max-h-80 px-3 py-2 space-y-1.5 rounded-xl"
       style={{ background: '#0f0f11', border: '1px solid #222' }}>
       {lines.map((line, i) => {
         const isMe  = line.sender === 'me';
         const isHit = highlightIdx !== null && line.idx === highlightIdx;
         return (
           <div key={i}
-            ref={el => { lineRefs.current[line.idx] = el; }}
+            data-line={line.idx}
             className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
             <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5"
               style={{ background: isMe ? '#1d4ed8' : '#16a34a', color: '#fff' }}>
