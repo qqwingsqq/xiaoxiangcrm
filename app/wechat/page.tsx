@@ -160,6 +160,18 @@ function PendingContactsModal({
     onDone();
   };
 
+  const doBlock = async (contact: PendingContact) => {
+    setWorking(prev => ({ ...prev, [contact.id]: true }));
+    await fetch('/api/wechat/blocklist', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ wxid: contact.contact_info, name: contact.name }),
+    });
+    setContacts(prev => prev.filter(c => c.id !== contact.id));
+    setWorking(prev => ({ ...prev, [contact.id]: false }));
+    onDone();
+  };
+
   const doRename = async (contact: PendingContact) => {
     const name = renameVal[contact.id]?.trim();
     if (!name) return;
@@ -213,7 +225,7 @@ function PendingContactsModal({
                     <p className="text-xs text-zinc-600 mt-0.5">{contact.chat_count} 条聊天 · {(contact.latest_date || contact.created_at).substring(0, 10)}</p>
                   </div>
                   {m === 'idle' && (
-                    <div className="flex gap-1.5 flex-shrink-0">
+                    <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
                       <button onClick={() => setMode(prev => ({ ...prev, [contact.id]: 'link' }))}
                         className="text-xs px-2.5 py-1 rounded-lg font-medium text-white transition-colors"
                         style={{ background: '#1d4ed8' }}>
@@ -223,6 +235,11 @@ function PendingContactsModal({
                         className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors text-zinc-300"
                         style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border)' }}>
                         新客户
+                      </button>
+                      <button onClick={() => doBlock(contact)} disabled={busy}
+                        className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors disabled:opacity-50"
+                        style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.3)', color: '#f87171' }}>
+                        🚫 屏蔽
                       </button>
                     </div>
                   )}
