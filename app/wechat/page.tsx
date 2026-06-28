@@ -77,7 +77,9 @@ function secondaryName(chat: ChatRow): string | null {
 // ── ChatPreview（待关联弹窗里的聊天快照）────────────────────────
 function ChatPreview({ raw }: { raw: string }) {
   const [expanded, setExpanded] = useState(false);
-  const lines = raw.split('\n').filter(l => l.trim()).slice(0, expanded ? 30 : 6);
+  const allLines = raw.split('\n').filter(l => l.trim());
+  // 显示最早的几条（从头开始），方便识别是谁
+  const lines = allLines.slice(0, expanded ? 50 : 8);
   return (
     <div className="rounded-lg overflow-hidden" style={{ background: '#0f0f11', border: '1px solid #222' }}>
       <div className="px-3 py-2 space-y-1">
@@ -98,11 +100,11 @@ function ChatPreview({ raw }: { raw: string }) {
           return <p key={i} className="text-xs text-zinc-600">{line}</p>;
         })}
       </div>
-      {raw.split('\n').filter(l => l.trim()).length > 6 && (
+      {allLines.length > 8 && (
         <button onClick={() => setExpanded(e => !e)}
           className="w-full py-1 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors border-t"
           style={{ borderColor: '#222' }}>
-          {expanded ? '收起' : `展开全部 ${raw.split('\n').filter(l=>l.trim()).length} 条`}
+          {expanded ? '收起' : `展开全部 ${allLines.length} 条`}
         </button>
       )}
     </div>
