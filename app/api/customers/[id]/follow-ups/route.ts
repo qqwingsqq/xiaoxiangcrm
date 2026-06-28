@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, { params }: Params) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const db = await ensureDb();
+  const { rows: owns } = await db.execute({
+    sql: 'SELECT id FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+    args: [id, session.id],
+  });
+  if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+
   const { rows } = await db.execute({
     sql: `SELECT f.*,
             (SELECT COUNT(*) FROM documents d WHERE d.follow_up_id = f.id) as doc_count
@@ -16,6 +27,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function POST(request: NextRequest, { params }: Params) {
+  let session;
+  try { session = requireSession(request); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const body = await request.json();
 
@@ -24,8 +39,11 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const db = await ensureDb();
-  const { rows: exists } = await db.execute({ sql: 'SELECT id FROM customers WHERE id = ?', args: [id] });
-  if (!exists[0]) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
+  const { rows: owns } = await db.execute({
+    sql: 'SELECT id FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+    args: [id, session.id],
+  });
+  if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
   const result = await db.execute({
     sql: `INSERT INTO follow_ups (customer_id, title, content, follow_up_date) VALUES (?, ?, ?, ?)`,

@@ -1,20 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 import Anthropic from '@anthropic-ai/sdk';
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function verifyOwnership(db: Awaited<ReturnType<typeof ensureDb>>, chatId: string, userId: number) {
+  const { rows } = await db.execute({
+    sql: `SELECT wc.id FROM wechat_chats wc
+          JOIN customers c ON c.id = wc.customer_id
+          WHERE wc.id = ? AND (c.user_id = ? OR c.user_id IS NULL)`,
+    args: [chatId, userId],
+  });
+  return rows.length > 0;
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const db = await ensureDb();
+  if (!await verifyOwnership(db, id, session.id)) {
+    return NextResponse.json({ error: 'not found' }, { status: 404 });
+  }
   await db.execute({ sql: 'DELETE FROM wechat_chats WHERE id = ?', args: [id] });
   return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let session;
+  try { session = requireSession(req); } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   const { id } = await params;
   const { action } = await req.json();
   if (action !== 'analyze') return NextResponse.json({ error: 'unknown action' }, { status: 400 });
 
   const db = await ensureDb();
+  if (!await verifyOwnership(db, id, session.id)) {
+    return NextResponse.json({ error: 'not found' }, { status: 404 });
+  }
+
   const { rows: [chat] } = await db.execute({ sql: 'SELECT * FROM wechat_chats WHERE id = ?', args: [id] });
   if (!chat) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
