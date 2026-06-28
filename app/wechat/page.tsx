@@ -629,7 +629,7 @@ export default function WeChatDashboard() {
                   </div>
                   <div className="col-span-8 sm:col-span-3">
                     {chat.analysis_status === 'done' && chat.summary ? (
-                      <p className="text-xs text-zinc-300 leading-relaxed line-clamp-2">{chat.summary}</p>
+                      <p className="text-xs text-zinc-300 leading-relaxed">{chat.summary}</p>
                     ) : (
                       <p className="text-xs text-zinc-600 line-clamp-2">{chat.raw_content.substring(0, 60)}…</p>
                     )}
