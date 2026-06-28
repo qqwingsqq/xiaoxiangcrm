@@ -34,9 +34,13 @@ ${content.substring(0, 6000)}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const db = await ensureDb();
-  const { rows } = await db.execute({
-    sql: 'SELECT * FROM wechat_chats WHERE customer_id = ? ORDER BY created_at DESC',
+  const since  = req.nextUrl.searchParams.get('since');
+  const db     = await ensureDb();
+  const { rows } = await db.execute(since ? {
+    sql:  'SELECT * FROM wechat_chats WHERE customer_id = ? AND created_at > ? ORDER BY created_at DESC',
+    args: [id, since],
+  } : {
+    sql:  'SELECT * FROM wechat_chats WHERE customer_id = ? ORDER BY created_at DESC',
     args: [id],
   });
   return NextResponse.json(rows);

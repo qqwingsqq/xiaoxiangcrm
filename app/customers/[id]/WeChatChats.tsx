@@ -35,7 +35,6 @@ function parseLines(raw: string): ChatLine[] {
     .map((line, idx) => {
       const m = line.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(我|对方)[:：]\s*(.+)$/);
       if (m) return { time: m[1], sender: m[2] === '我' ? 'me' : 'other', text: m[3].trim(), idx } as ChatLine;
-      // fallback: unformatted line shown as system note
       if (line.trim()) return { time: '', sender: 'other' as const, text: line.trim(), idx };
       return null;
     })
@@ -47,7 +46,7 @@ function findMatchLines(lines: ChatLine[], query: string): number[] {
     .split(/\s+/).filter(w => w.length >= 2);
   if (!words.length) return [];
   const scored = lines.map(l => {
-    const t = l.text.toLowerCase();
+    const t     = l.text.toLowerCase();
     const score = words.reduce((n, w) => n + (t.includes(w.toLowerCase()) ? 1 : 0), 0);
     return { idx: l.idx, score };
   }).filter(x => x.score > 0);
@@ -55,41 +54,51 @@ function findMatchLines(lines: ChatLine[], query: string): number[] {
   return scored.slice(0, 3).map(x => x.idx);
 }
 
-function ChatViewer({ raw, highlightIdx }: { raw: string; highlightIdx: number | null }) {
-  const lines = parseLines(raw);
+// ── ChatViewer ────────────────────────────────────────────────
+function ChatViewer({
+  raw,
+  highlightIdx,
+  scrollTrigger,
+}: {
+  raw: string;
+  highlightIdx: number | null;
+  scrollTrigger: number; // increments each time we want a new scroll
+}) {
+  const lines    = parseLines(raw);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  // Scroll whenever scrollTrigger changes (even if highlightIdx is the same value)
   useEffect(() => {
-    if (highlightIdx !== null) {
+    if (highlightIdx === null) return;
+    // Give DOM a tick to paint before scrolling
+    requestAnimationFrame(() => {
       const el = lineRefs.current[highlightIdx];
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, [highlightIdx]);
+    });
+  }, [scrollTrigger, highlightIdx]);
 
   return (
     <div className="overflow-y-auto max-h-80 px-3 py-2 space-y-1.5 rounded-xl"
       style={{ background: '#0f0f11', border: '1px solid #222' }}>
       {lines.map((line, i) => {
-        const isMe = line.sender === 'me';
+        const isMe  = line.sender === 'me';
         const isHit = highlightIdx !== null && line.idx === highlightIdx;
         return (
-          <div key={i} ref={el => { lineRefs.current[line.idx] = el; }}
+          <div key={i}
+            ref={el => { lineRefs.current[line.idx] = el; }}
             className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-            {/* Avatar */}
             <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5"
               style={{ background: isMe ? '#1d4ed8' : '#16a34a', color: '#fff' }}>
               {isMe ? '我' : '他'}
             </div>
             <div className={`flex flex-col gap-0.5 max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
-              {line.time && (
-                <span className="text-[10px] text-zinc-600">{line.time}</span>
-              )}
+              {line.time && <span className="text-[10px] text-zinc-600">{line.time}</span>}
               <div className="px-2.5 py-1.5 rounded-xl text-xs leading-relaxed transition-all duration-300"
                 style={{
                   background: isHit
                     ? 'rgba(251,191,36,0.25)'
                     : isMe ? 'rgba(29,78,216,0.3)' : '#1e1e22',
-                  color: isHit ? '#fbbf24' : isMe ? '#93c5fd' : '#d1d5db',
+                  color:  isHit ? '#fbbf24' : isMe ? '#93c5fd' : '#d1d5db',
                   border: isHit ? '1px solid rgba(251,191,36,0.5)' : '1px solid transparent',
                   boxShadow: isHit ? '0 0 8px rgba(251,191,36,0.2)' : undefined,
                 }}>
@@ -103,56 +112,67 @@ function ChatViewer({ raw, highlightIdx }: { raw: string; highlightIdx: number |
   );
 }
 
+// ── TagItem ───────────────────────────────────────────────────
 function TagItem({ text, onClick }: { text: string; onClick: () => void }) {
   const [active, setActive] = useState(false);
-  const handle = () => { setActive(true); onClick(); setTimeout(() => setActive(false), 2000); };
+  const handle = () => {
+    setActive(true);
+    onClick();
+    setTimeout(() => setActive(false), 2000);
+  };
   return (
-    <button onClick={handle}
-      title="点击定位到聊天原文"
+    <button onClick={handle} title="点击定位到聊天原文"
       className="text-left text-xs px-2 py-1 rounded-lg transition-all flex items-start gap-1.5 w-full hover:opacity-90"
       style={{
         background: active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)',
         border: `1px solid ${active ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.08)'}`,
-        color: active ? '#fbbf24' : '#d1d5db',
+        color:  active ? '#fbbf24' : '#d1d5db',
       }}>
       <span className="mt-0.5 flex-shrink-0" style={{ color: active ? '#fbbf24' : '#6b7280' }}>→</span>
       <span>{text}</span>
-      {active && <span className="ml-auto flex-shrink-0 text-[10px] text-yellow-400">已定位</span>}
+      {active && <span className="ml-auto flex-shrink-0 text-[10px] text-yellow-400">已定位 ↓</span>}
     </button>
   );
 }
 
-function ChatCard({ chat, onDeleted, onAnalyzed }: {
+// ── ChatCard ──────────────────────────────────────────────────
+function ChatCard({ chat, isNew, onDeleted, onAnalyzed }: {
   chat: WeChatChat;
+  isNew?: boolean;
   onDeleted: () => void;
   onAnalyzed: (c: WeChatChat) => void;
 }) {
-  const [analyzing, setAnalyzing] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [showChat, setShowChat] = useState(false);
+  const [analyzing, setAnalyzing]     = useState(false);
+  const [expanded, setExpanded]       = useState(false);
+  const [showChat, setShowChat]       = useState(false);
   const [highlightIdx, setHighlightIdx] = useState<number | null>(null);
-  const lines = useRef<ChatLine[]>([]);
+  const [scrollTrigger, setScrollTrigger] = useState(0);
+  const linesRef = useRef<ChatLine[]>([]);
 
-  useEffect(() => { lines.current = parseLines(chat.raw_content); }, [chat.raw_content]);
+  useEffect(() => { linesRef.current = parseLines(chat.raw_content); }, [chat.raw_content]);
 
-  const intent = INTENT_LABEL[chat.intent_level] || INTENT_LABEL.unknown;
+  const intent   = INTENT_LABEL[chat.intent_level] || INTENT_LABEL.unknown;
   const features = parseJson(chat.discussed_features);
   const steps    = parseJson(chat.next_steps);
   const keyPts   = parseJson(chat.key_points);
 
+  // Click on a summary item → open chat viewer + scroll to match
   const locate = useCallback((query: string) => {
+    const hits = findMatchLines(linesRef.current, query);
+    const idx  = hits.length > 0 ? hits[0] : null;
+    setHighlightIdx(idx);
     setShowChat(true);
-    const hits = findMatchLines(lines.current, query);
-    setHighlightIdx(hits.length > 0 ? hits[0] : null);
+    // scrollTrigger forces the effect to re-run even if idx didn't change
+    setScrollTrigger(t => t + 1);
   }, []);
 
   const analyze = async () => {
     setAnalyzing(true);
     try {
       const res = await fetch(`/api/wechat-chats/${chat.id}`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'analyze' }),
+        body:    JSON.stringify({ action: 'analyze' }),
       });
       if (res.ok) { onAnalyzed(await res.json()); setExpanded(true); }
       else { const e = await res.json(); alert(e.error || 'AI 分析失败'); }
@@ -162,12 +182,29 @@ function ChatCard({ chat, onDeleted, onAnalyzed }: {
   const hasSummary = chat.analysis_status === 'done';
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: '#1c1c1f', border: '1px solid var(--border)' }}>
-      {/* Header */}
+    <div className="rounded-xl overflow-hidden"
+      style={{
+        background: '#1c1c1f',
+        border: `1px solid ${isNew ? 'rgba(16,185,129,0.5)' : 'var(--border)'}`,
+        boxShadow: isNew ? '0 0 0 1px rgba(16,185,129,0.15)' : undefined,
+      }}>
+
+      {isNew && (
+        <div className="px-4 py-1.5 flex items-center gap-1.5 text-xs font-medium"
+          style={{ background: 'rgba(16,185,129,0.08)', color: '#10b981', borderBottom: '1px solid rgba(16,185,129,0.2)' }}>
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+          </span>
+          新消息已同步
+        </div>
+      )}
+
+      {/* Header row */}
       <div className="flex items-start gap-3 p-4">
         <div className="flex-shrink-0 mt-0.5">
           <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M8.5 4a6.5 6.5 0 00-3.5 12.01V19l2.7-1.35A6.5 6.5 0 108.5 4zm8 3.5a5 5 0 100 10 5 5 0 000-10z" />
+            <path d="M8.5 4a6.5 6.5 0 00-3.5 12.01V19l2.7-1.35A6.5 6.5 0 108.5 4z" />
           </svg>
         </div>
         <div className="flex-1 min-w-0">
@@ -199,10 +236,11 @@ function ChatCard({ chat, onDeleted, onAnalyzed }: {
               {expanded ? '收起' : '详情'}
             </button>
           )}
-          <button onClick={() => { setShowChat(s => !s); setHighlightIdx(null); }}
+          <button
+            onClick={() => { setShowChat(s => !s); setHighlightIdx(null); }}
+            title={showChat ? '收起聊天记录' : '查看聊天记录'}
             className="text-xs px-2 py-1 rounded transition-colors"
-            style={{ color: showChat ? '#10b981' : '#6b7280' }}
-            title="查看聊天记录">
+            style={{ color: showChat ? '#10b981' : '#6b7280' }}>
             💬
           </button>
           {(chat.analysis_status === 'pending' || chat.analysis_status === 'error') && (
@@ -212,7 +250,10 @@ function ChatCard({ chat, onDeleted, onAnalyzed }: {
               {analyzing ? '分析中…' : '✨ AI提炼'}
             </button>
           )}
-          <button onClick={() => { if (confirm('删除此聊天记录？')) fetch(`/api/wechat-chats/${chat.id}`, { method: 'DELETE' }).then(onDeleted); }}
+          <button onClick={() => {
+            if (confirm('删除此聊天记录？'))
+              fetch(`/api/wechat-chats/${chat.id}`, { method: 'DELETE' }).then(onDeleted);
+          }}
             className="p-1 rounded text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-colors">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -221,13 +262,14 @@ function ChatCard({ chat, onDeleted, onAnalyzed }: {
         </div>
       </div>
 
-      {/* AI Analysis detail */}
+      {/* AI 详情展开 */}
       {expanded && hasSummary && (
         <div className="px-4 pb-3 border-t space-y-3" style={{ borderColor: '#2a2a2e' }}>
           {features.length > 0 && (
             <div className="pt-3">
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">🔧 讨论的功能需求
-                <span className="ml-1 text-zinc-600 font-normal">（点击可定位原文）</span>
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">
+                🔧 讨论的功能需求
+                <span className="ml-1 text-zinc-600 font-normal">（点击可定位聊天原文）</span>
               </p>
               <ul className="space-y-1">
                 {features.map((f, i) => (
@@ -241,28 +283,26 @@ function ChatCard({ chat, onDeleted, onAnalyzed }: {
           )}
           {steps.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">📋 下一步计划
-                <span className="ml-1 text-zinc-600 font-normal">（点击可定位原文）</span>
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">
+                📋 下一步计划
+                <span className="ml-1 text-zinc-600 font-normal">（点击可定位聊天原文）</span>
               </p>
               <ul className="space-y-1">
                 {steps.map((s, i) => (
-                  <li key={i}>
-                    <TagItem text={s} onClick={() => locate(s)} />
-                  </li>
+                  <li key={i}><TagItem text={s} onClick={() => locate(s)} /></li>
                 ))}
               </ul>
             </div>
           )}
           {keyPts.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">✨ 其他重点
-                <span className="ml-1 text-zinc-600 font-normal">（点击可定位原文）</span>
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">
+                ✨ 其他重点
+                <span className="ml-1 text-zinc-600 font-normal">（点击可定位聊天原文）</span>
               </p>
               <ul className="space-y-1">
                 {keyPts.map((k, i) => (
-                  <li key={i}>
-                    <TagItem text={k} onClick={() => locate(k)} />
-                  </li>
+                  <li key={i}><TagItem text={k} onClick={() => locate(k)} /></li>
                 ))}
               </ul>
             </div>
@@ -270,50 +310,93 @@ function ChatCard({ chat, onDeleted, onAnalyzed }: {
         </div>
       )}
 
-      {/* Chat viewer */}
+      {/* 聊天气泡 */}
       {showChat && (
         <div className="px-4 pb-4 border-t" style={{ borderColor: '#2a2a2e' }}>
           <div className="flex items-center justify-between py-2 mb-1">
-            <span className="text-xs text-zinc-500">聊天记录{highlightIdx !== null ? ' · 已高亮定位' : ''}</span>
+            <span className="text-xs text-zinc-500">
+              聊天记录{highlightIdx !== null ? ' · 黄色高亮为定位位置' : ''}
+            </span>
             {highlightIdx !== null && (
               <button onClick={() => setHighlightIdx(null)}
-                className="text-xs text-zinc-600 hover:text-zinc-400">清除高亮</button>
+                className="text-xs text-zinc-600 hover:text-zinc-400">
+                清除高亮
+              </button>
             )}
           </div>
-          <ChatViewer raw={chat.raw_content} highlightIdx={highlightIdx} />
+          <ChatViewer
+            raw={chat.raw_content}
+            highlightIdx={highlightIdx}
+            scrollTrigger={scrollTrigger}
+          />
         </div>
       )}
     </div>
   );
 }
 
+// ── Main component ────────────────────────────────────────────
 export default function WeChatChats({ customerId }: { customerId: number }) {
-  const [chats, setChats]   = useState<WeChatChat[]>([]);
+  const [chats, setChats]     = useState<WeChatChat[]>([]);
+  const [newIds, setNewIds]   = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm]       = useState({ raw_content: '', chat_date: '' });
   const [saving, setSaving]   = useState(false);
+  const latestCreatedAt       = useRef<string>('');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const res = await fetch(`/api/customers/${customerId}/wechat-chats`);
-    setChats(await res.json());
+    const data: WeChatChat[] = await res.json();
+    setChats(data);
+    if (data.length > 0) {
+      latestCreatedAt.current = data.reduce(
+        (max, c) => (c.created_at > max ? c.created_at : max), ''
+      );
+    }
     setLoading(false);
-  };
+  }, [customerId]);
 
-  useEffect(() => { load(); }, [customerId]);
+  useEffect(() => { load(); }, [load]);
+
+  // Poll every 30s for new chats from this customer
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      if (!latestCreatedAt.current) return;
+      const res  = await fetch(
+        `/api/customers/${customerId}/wechat-chats?since=${encodeURIComponent(latestCreatedAt.current)}`
+      );
+      const data: WeChatChat[] = await res.json();
+      if (data.length > 0) {
+        const freshIds = new Set(data.map(c => c.id));
+        setNewIds(prev => new Set([...prev, ...freshIds]));
+        setChats(prev => {
+          const existing = new Set(prev.map(c => c.id));
+          const fresh = data.filter(c => !existing.has(c.id));
+          if (!fresh.length) return prev;
+          latestCreatedAt.current = data.reduce(
+            (max, c) => (c.created_at > max ? c.created_at : max),
+            latestCreatedAt.current
+          );
+          return [...fresh, ...prev];
+        });
+      }
+    }, 30_000);
+    return () => clearInterval(poll);
+  }, [customerId]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.raw_content.trim()) return;
     setSaving(true);
     const res = await fetch(`/api/customers/${customerId}/wechat-chats`, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, auto_analyze: true }),
+      body:    JSON.stringify({ ...form, auto_analyze: true }),
     });
     if (res.ok) {
-      const created = await res.json();
+      const created: WeChatChat = await res.json();
       setChats(c => [created, ...c]);
       setForm({ raw_content: '', chat_date: '' });
       setShowAdd(false);
@@ -324,7 +407,11 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
     setSaving(false);
   };
 
-  const inputStyle: React.CSSProperties = { background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' };
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg-input)',
+    border:     '1px solid var(--border)',
+    color:      'var(--text-primary)',
+  };
   const inputCls = 'w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500';
 
   return (
@@ -335,6 +422,12 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
             <path d="M8.5 4a6.5 6.5 0 00-3.5 12.01V19l2.7-1.35A6.5 6.5 0 108.5 4z" />
           </svg>
           <h3 className="text-sm font-semibold text-white">微信聊天记录</h3>
+          {newIds.size > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+              style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}>
+              {newIds.size} 条新消息
+            </span>
+          )}
         </div>
         <button onClick={() => setShowAdd(s => !s)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-white"
@@ -355,7 +448,8 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
           </div>
           <div>
             <label className="text-xs text-zinc-500 mb-1 block">聊天日期（可选）</label>
-            <input type="date" value={form.chat_date} onChange={e => setForm(f => ({ ...f, chat_date: e.target.value }))}
+            <input type="date" value={form.chat_date}
+              onChange={e => setForm(f => ({ ...f, chat_date: e.target.value }))}
               className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} />
           </div>
           <div>
@@ -391,6 +485,7 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
         <div className="space-y-3">
           {chats.map(chat => (
             <ChatCard key={chat.id} chat={chat}
+              isNew={newIds.has(chat.id)}
               onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
               onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
             />
