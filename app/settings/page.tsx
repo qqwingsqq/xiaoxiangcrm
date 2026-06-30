@@ -9,14 +9,14 @@ type Theme = 'dark' | 'light' | 'system';
 type Shortcut = 'vol-down-double' | 'power-vol-down';
 
 interface Profile {
-  display_name: string; phone: string; company: string;
+  display_name: string; phone: string; email: string; company: string;
   title: string; wechat_id: string;
   theme: Theme; record_shortcut: Shortcut;
   amap_key: string; amap_security: string;
 }
 
 const DEFAULT_PROFILE: Profile = {
-  display_name: '', phone: '', company: '', title: '', wechat_id: '',
+  display_name: '', phone: '', email: '', company: '', title: '', wechat_id: '',
   theme: 'dark', record_shortcut: 'vol-down-double',
   amap_key: '', amap_security: '',
 };
@@ -377,7 +377,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 // ── Profile card (view mode) ──────────────────────────────
 function ProfileCard({ profile, passwordSet, onEdit }: { profile: Profile; passwordSet: boolean; onEdit: () => void }) {
-  const hasInfo = profile.display_name || profile.company || profile.phone;
+  const hasInfo = profile.display_name || profile.company || profile.phone || profile.email;
   const initial = profile.display_name?.charAt(0)?.toUpperCase() || profile.company?.charAt(0)?.toUpperCase() || '?';
 
   return (
@@ -415,6 +415,7 @@ function ProfileCard({ profile, passwordSet, onEdit }: { profile: Profile; passw
             )}
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 pt-0.5">
               {profile.phone && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>📱 {profile.phone}</span>}
+              {profile.email && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>邮箱：{profile.email}</span>}
               {profile.wechat_id && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>💬 {profile.wechat_id}</span>}
             </div>
           </div>
@@ -577,6 +578,7 @@ export default function SettingsPage() {
     const fromLocal = (): Profile => ({
       display_name: localStorage.getItem('crm-display-name') || '',
       phone: localStorage.getItem('crm-phone') || '',
+      email: localStorage.getItem('crm-email') || '',
       company: localStorage.getItem('crm-company') || '',
       title: localStorage.getItem('crm-title') || '',
       wechat_id: localStorage.getItem('crm-wechat-id') || '',
@@ -596,6 +598,7 @@ export default function SettingsPage() {
       const merged: Profile = {
         display_name: data.display_name ?? local.display_name,
         phone: data.phone ?? local.phone,
+        email: data.email ?? local.email,
         company: data.company ?? local.company,
         title: data.title ?? local.title,
         wechat_id: data.wechat_id ?? local.wechat_id,
@@ -607,6 +610,7 @@ export default function SettingsPage() {
       const mergedPwSet = localPwSet || !!data.password_hash;
       localStorage.setItem('crm-display-name', merged.display_name);
       localStorage.setItem('crm-phone', merged.phone);
+      localStorage.setItem('crm-email', merged.email);
       localStorage.setItem('crm-company', merged.company);
       localStorage.setItem('crm-title', merged.title);
       localStorage.setItem('crm-wechat-id', merged.wechat_id);
@@ -636,6 +640,7 @@ export default function SettingsPage() {
     // Theme + local
     localStorage.setItem('crm-display-name', form.display_name);
     localStorage.setItem('crm-phone', form.phone);
+    localStorage.setItem('crm-email', form.email);
     localStorage.setItem('crm-company', form.company);
     localStorage.setItem('crm-title', form.title);
     localStorage.setItem('crm-wechat-id', form.wechat_id);
@@ -644,7 +649,7 @@ export default function SettingsPage() {
     document.documentElement.setAttribute('data-theme', form.theme);
 
     const payload: Record<string, string> = {
-      display_name: form.display_name, phone: form.phone, company: form.company,
+      display_name: form.display_name, phone: form.phone, email: form.email, company: form.company,
       title: form.title, wechat_id: form.wechat_id,
       theme: form.theme, record_shortcut: form.record_shortcut,
     };
@@ -738,6 +743,10 @@ export default function SettingsPage() {
               <Field label="手机号">
                 <input value={form.phone} onChange={e => set('phone', e.target.value)}
                   placeholder="138xxxxxxxx" className={INP_CLS} style={INP_ST} type="tel" />
+              </Field>
+              <Field label="邮箱">
+                <input value={form.email} onChange={e => set('email', e.target.value)}
+                  placeholder="you@example.com" className={INP_CLS} style={INP_ST} type="email" />
               </Field>
               <Field label="公司">
                 <input value={form.company} onChange={e => set('company', e.target.value)}

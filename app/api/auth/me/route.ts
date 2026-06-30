@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   const db = await ensureDb();
   const { rows } = await db.execute({
-    sql: 'SELECT id, username, display_name, created_at FROM users WHERE id = ?',
+    sql: 'SELECT id, username, display_name, phone, email, created_at FROM users WHERE id = ?',
     args: [session.id],
   });
   if (!rows.length) return NextResponse.json({ error: 'user not found' }, { status: 404 });

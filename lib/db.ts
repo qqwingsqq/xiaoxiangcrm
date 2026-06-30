@@ -105,6 +105,15 @@ export async function ensureDb(): Promise<Client> {
         value TEXT NOT NULL,
         updated_at TEXT DEFAULT (datetime('now','localtime'))
       )`,
+      `CREATE TABLE IF NOT EXISTS password_reset_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        method TEXT NOT NULL,
+        contact TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+      )`,
       `CREATE TABLE IF NOT EXISTS customer_types (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key TEXT NOT NULL UNIQUE,
@@ -137,6 +146,8 @@ export async function ensureDb(): Promise<Client> {
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       display_name TEXT,
+      phone TEXT,
+      email TEXT,
       created_at TEXT DEFAULT (datetime('now','localtime'))
     )`); } catch (_) {}
     // Migrations
@@ -153,6 +164,8 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE customers ADD COLUMN customer_attribute TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN customer_status TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE customers ADD COLUMN user_id INTEGER DEFAULT 1'); } catch (_) {}
+    try { await db.execute('ALTER TABLE users ADD COLUMN phone TEXT'); } catch (_) {}
+    try { await db.execute('ALTER TABLE users ADD COLUMN email TEXT'); } catch (_) {}
     // Seed default customer types if empty
     const { rows } = await db.execute('SELECT COUNT(*) as cnt FROM customer_types');
     if ((rows[0]?.cnt as number) === 0) {
