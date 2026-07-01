@@ -17,19 +17,42 @@ export async function POST(req: NextRequest) {
   });
 
   let customerId: number;
+  let wechatContactId: number | null = null;
   if (rows.length > 0) {
     customerId = rows[0].id as number;
+
+    // Find or create wechat contact
+    const { rows: contactRows } = await db.execute({
+      sql: `SELECT id FROM wechat_contacts WHERE customer_id = ? AND wxid = ? LIMIT 1`,
+      args: [customerId, wxid],
+    });
+    if (contactRows.length > 0) {
+      wechatContactId = contactRows[0].id as number;
+    } else {
+      const insContact = await db.execute({
+        sql: `INSERT INTO wechat_contacts (customer_id, name, wxid) VALUES (?, ?, ?) RETURNING id`,
+        args: [customerId, name || wxid, wxid],
+      });
+      wechatContactId = insContact.rows[0].id as number;
+    }
   } else {
     const ins = await db.execute({
       sql: `INSERT INTO customers (name, type, contact_info, tags, user_id) VALUES (?, '个人客户', ?, '["微信导入"]', ?) RETURNING id`,
       args: [name || wxid, wxid, userId],
     });
     customerId = ins.rows[0].id as number;
+
+    // Create default wechat contact for new customer
+    const insContact = await db.execute({
+      sql: `INSERT INTO wechat_contacts (customer_id, name, wxid) VALUES (?, ?, ?) RETURNING id`,
+      args: [customerId, name || wxid, wxid],
+    });
+    wechatContactId = insContact.rows[0].id as number;
   }
 
   const { rows: existing } = await db.execute({
-    sql: `SELECT id, raw_content FROM wechat_chats WHERE customer_id = ? AND chat_date = ?`,
-    args: [customerId, date],
+    sql: `SELECT id, raw_content FROM wechat_chats WHERE customer_id = ? AND chat_date = ? AND wechat_contact_id IS ?`,
+    args: [customerId, date, wechatContactId],
   });
 
   if (existing.length > 0) {
@@ -41,8 +64,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ action: 'appended', chat_id: existing[0].id });
   } else {
     const ins = await db.execute({
-      sql: `INSERT INTO wechat_chats (customer_id, raw_content, chat_date, analysis_status) VALUES (?, ?, ?, 'pending') RETURNING id`,
-      args: [customerId, content, date],
+      sql: `INSERT INTO wechat_chats (customer_id, wechat_contact_id, raw_content, chat_date, analysis_status) VALUES (?, ?, ?, ?, 'pending') RETURNING id`,
+      args: [customerId, wechatContactId, content, date],
     });
     return NextResponse.json({ action: 'created', chat_id: ins.rows[0].id });
   }

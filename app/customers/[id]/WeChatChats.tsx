@@ -359,17 +359,43 @@ function ChatCard({ chat, isNew, onDeleted, onAnalyzed }: {
 
 // ── Main component ────────────────────────────────────────────
 export default function WeChatChats({ customerId }: { customerId: number }) {
-  const [chats, setChats]     = useState<WeChatChat[]>([]);
-  const [newIds, setNewIds]   = useState<Set<number>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm]       = useState({ raw_content: '', chat_date: '' });
-  const [saving, setSaving]   = useState(false);
-  const latestCreatedAt       = useRef<string>('');
+  const [chats, setChats]         = useState<WeChatChat[]>([]);
+  const [contacts, setContacts]   = useState<WeChatContact[]>([]);
+  const [newIds, setNewIds]       = useState<Set<number>>(new Set());
+  const [loading, setLoading]     = useState(true);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [activeContact, setActiveContact] = useState<number | 'all' | 'none'>('all');
+  const [showAdd, setShowAdd]     = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [form, setForm]           = useState({ raw_content: '', chat_date: '', wechat_contact_id: '' });
+  const [newContactForm, setNewContactForm] = useState({ name: '', wxid: '', role: '' });
+  const [saving, setSaving]       = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
+  const latestCreatedAt           = useRef<string>('');
+
+  const loadContacts = useCallback(async () => {
+    setContactsLoading(true);
+    try {
+      const res = await fetch(`/api/customers/${customerId}/wechat-contacts`);
+      if (res.ok) {
+        const data: WeChatContact[] = await res.json();
+        setContacts(data);
+      }
+    } finally {
+      setContactsLoading(false);
+    }
+  }, [customerId]);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/customers/${customerId}/wechat-chats`);
+    let url = `/api/customers/${customerId}/wechat-chats`;
+    const params = new URLSearchParams();
+    if (activeContact !== 'all') {
+      params.set('contact_id', activeContact === 'none' ? 'none' : String(activeContact));
+    }
+    if (params.toString()) url += `?${params.toString()}`;
+
+    const res = await fetch(url);
     const data: WeChatChat[] = await res.json();
     setChats(data);
     if (data.length > 0) {
@@ -378,17 +404,19 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
       );
     }
     setLoading(false);
-  }, [customerId]);
+  }, [customerId, activeContact]);
 
+  useEffect(() => { loadContacts(); }, [loadContacts]);
   useEffect(() => { load(); }, [load]);
 
-  // Poll every 30s for new chats from this customer
   useEffect(() => {
     const poll = setInterval(async () => {
       if (!latestCreatedAt.current) return;
-      const res  = await fetch(
-        `/api/customers/${customerId}/wechat-chats?since=${encodeURIComponent(latestCreatedAt.current)}`
-      );
+      let url = `/api/customers/${customerId}/wechat-chats?since=${encodeURIComponent(latestCreatedAt.current)}`;
+      if (activeContact !== 'all') {
+        url += `&contact_id=${activeContact === 'none' ? 'none' : activeContact}`;
+      }
+      const res  = await fetch(url);
       const data: WeChatChat[] = await res.json();
       if (data.length > 0) {
         const freshIds = new Set(data.map(c => c.id));
@@ -406,27 +434,67 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
       }
     }, 30_000);
     return () => clearInterval(poll);
-  }, [customerId]);
+  }, [customerId, activeContact]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.raw_content.trim()) return;
     setSaving(true);
+    const body: Record<string, any> = {
+      raw_content: form.raw_content,
+      chat_date: form.chat_date || null,
+      auto_analyze: true,
+    };
+    if (form.wechat_contact_id && form.wechat_contact_id !== 'none') {
+      body.wechat_contact_id = Number(form.wechat_contact_id);
+    }
     const res = await fetch(`/api/customers/${customerId}/wechat-chats`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ ...form, auto_analyze: true }),
+      body:    JSON.stringify(body),
     });
     if (res.ok) {
       const created: WeChatChat = await res.json();
       setChats(c => [created, ...c]);
-      setForm({ raw_content: '', chat_date: '' });
+      setForm({ raw_content: '', chat_date: '', wechat_contact_id: form.wechat_contact_id });
       setShowAdd(false);
+      loadContacts();
     } else {
       const e2 = await res.json();
       alert(e2.error || '保存失败');
     }
     setSaving(false);
+  };
+
+  const handleAddContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newContactForm.name.trim()) return;
+    setContactSaving(true);
+    const res = await fetch(`/api/customers/${customerId}/wechat-contacts`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(newContactForm),
+    });
+    if (res.ok) {
+      const created: WeChatContact = await res.json();
+      setContacts(c => [...c, created]);
+      setNewContactForm({ name: '', wxid: '', role: '' });
+      setShowAddContact(false);
+      setActiveContact(created.id);
+    } else {
+      const e2 = await res.json();
+      alert(e2.error || '添加失败');
+    }
+    setContactSaving(false);
+  };
+
+  const handleDeleteContact = async (contactId: number) => {
+    if (!confirm('确定删除此联系人？该联系人的聊天记录不会被删除。')) return;
+    const res = await fetch(`/api/wechat-contacts/${contactId}`, { method: 'DELETE' });
+    if (res.ok) {
+      setContacts(c => c.filter(x => x.id !== contactId));
+      if (activeContact === contactId) setActiveContact('all');
+    }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -435,6 +503,13 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
     color:      'var(--text-primary)',
   };
   const inputCls = 'w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500';
+
+  const allContactsChatCount = contacts.reduce((sum, c) => sum + c.chat_count, 0);
+
+  const displayName = (c: WeChatContact) => {
+    if (c.role) return `${c.name} · ${c.role}`;
+    return c.name;
+  };
 
   return (
     <div>
@@ -451,15 +526,67 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
             </span>
           )}
         </div>
-        <button onClick={() => setShowAdd(s => !s)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-white"
-          style={{ background: '#16a34a' }}>
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          导入聊天
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowAddContact(s => !s)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            添加联系人
+          </button>
+          <button onClick={() => setShowAdd(s => !s)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-white"
+            style={{ background: '#16a34a' }}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            导入聊天
+          </button>
+        </div>
       </div>
+
+      {showAddContact && (
+        <form onSubmit={handleAddContact} className="rounded-xl p-4 mb-4 space-y-3"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <p className="text-xs font-medium text-white">添加微信联系人</p>
+          <div>
+            <label className="text-xs text-zinc-500 mb-1 block">姓名 <span className="text-red-400">*</span></label>
+            <input type="text" value={newContactForm.name}
+              onChange={e => setNewContactForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="联系人姓名"
+              className={inputCls} style={inputStyle} autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">微信号</label>
+              <input type="text" value={newContactForm.wxid}
+                onChange={e => setNewContactForm(f => ({ ...f, wxid: e.target.value }))}
+                placeholder="选填"
+                className={inputCls} style={inputStyle} />
+            </div>
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">职位/角色</label>
+              <input type="text" value={newContactForm.role}
+                onChange={e => setNewContactForm(f => ({ ...f, role: e.target.value }))}
+                placeholder="如：采购、销售经理"
+                className={inputCls} style={inputStyle} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={contactSaving || !newContactForm.name.trim()}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors text-white"
+              style={{ background: '#1d4ed8' }}>
+              {contactSaving ? '添加中…' : '添加联系人'}
+            </button>
+            <button type="button" onClick={() => setShowAddContact(false)}
+              className="px-4 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-white transition-colors"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+              取消
+            </button>
+          </div>
+        </form>
+      )}
 
       {showAdd && (
         <form onSubmit={handleAdd} className="rounded-xl p-4 mb-4 space-y-3"
@@ -467,6 +594,17 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
           <div className="flex items-center gap-2 mb-2">
             <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             <p className="text-xs text-green-400 font-medium">粘贴微信聊天记录，AI将自动提炼关键信息</p>
+          </div>
+          <div>
+            <label className="text-xs text-zinc-500 mb-1 block">所属联系人</label>
+            <select value={form.wechat_contact_id}
+              onChange={e => setForm(f => ({ ...f, wechat_contact_id: e.target.value }))}
+              className={inputCls} style={inputStyle}>
+              <option value="">— 不指定（未分类）—</option>
+              {contacts.map(c => (
+                <option key={c.id} value={c.id}>{displayName(c)}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="text-xs text-zinc-500 mb-1 block">聊天日期（可选）</label>
@@ -495,6 +633,43 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
             </button>
           </div>
         </form>
+      )}
+
+      {!contactsLoading && contacts.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => setActiveContact('all')}
+            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1"
+            style={{
+              background: activeContact === 'all' ? 'rgba(22,163,74,0.15)' : 'var(--bg-input)',
+              color: activeContact === 'all' ? '#10b981' : 'var(--text-muted)',
+              border: `1px solid ${activeContact === 'all' ? '#10b981' : 'var(--border)'}`,
+            }}>
+            全部联系人
+            <span style={{ opacity: 0.6 }}>· {allContactsChatCount}</span>
+          </button>
+          {contacts.map(contact => (
+            <div key={contact.id} className="relative group">
+              <button
+                onClick={() => setActiveContact(contact.id)}
+                className="px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 pr-2"
+                style={{
+                  background: activeContact === contact.id ? 'rgba(22,163,74,0.15)' : 'var(--bg-input)',
+                  color: activeContact === contact.id ? '#10b981' : 'var(--text-muted)',
+                  border: `1px solid ${activeContact === contact.id ? '#10b981' : 'var(--border)'}`,
+                }}>
+                {displayName(contact)}
+                <span style={{ opacity: 0.6 }}>· {contact.chat_count}</span>
+                <span
+                  onClick={(e) => { e.stopPropagation(); handleDeleteContact(contact.id); }}
+                  className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400 cursor-pointer"
+                  style={{ fontSize: 12 }}>
+                  ×
+                </span>
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {loading ? (
