@@ -39,23 +39,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const { id } = await params;
-  const since  = req.nextUrl.searchParams.get('since');
-  const db     = await ensureDb();
+  const since     = req.nextUrl.searchParams.get('since');
+  const contactId = req.nextUrl.searchParams.get('contact_id');
+  const db        = await ensureDb();
 
-  // Verify customer ownership
   const { rows: owns } = await db.execute({
     sql: 'SELECT id FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
     args: [id, session.id],
   });
   if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
-  const { rows } = await db.execute(since ? {
-    sql:  'SELECT * FROM wechat_chats WHERE customer_id = ? AND created_at > ? ORDER BY created_at DESC',
-    args: [id, since],
-  } : {
-    sql:  'SELECT * FROM wechat_chats WHERE customer_id = ? ORDER BY created_at DESC',
-    args: [id],
-  });
+  let sql = 'SELECT * FROM wechat_chats WHERE customer_id = ?';
+  let args: any[] = [id];
+
+  if (contactId) {
+    if (contactId === 'none') {
+      sql += ' AND wechat_contact_id IS NULL';
+    } else {
+      sql += ' AND wechat_contact_id = ?';
+      args.push(contactId);
+    }
+  }
+
+  if (since) {
+    sql += ' AND created_at > ?';
+    args.push(since);
+  }
+
+  sql += ' ORDER BY created_at DESC';
+
+  const { rows } = await db.execute({ sql, args });
   return NextResponse.json(rows);
 }
 
@@ -65,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const { id } = await params;
-  const { raw_content, chat_date, auto_analyze } = await req.json();
+  const { raw_content, chat_date, auto_analyze, wechat_contact_id } = await req.json();
   if (!raw_content?.trim()) return NextResponse.json({ error: '聊天内容不能为空' }, { status: 400 });
 
   const db = await ensureDb();
@@ -76,10 +89,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
+  if (wechat_contact_id) {
+    const { rows: contactOwns } = await db.execute({
+      sql: 'SELECT id FROM wechat_contacts WHERE id = ? AND customer_id = ?',
+      args: [wechat_contact_id, id],
+    });
+    if (!contactOwns.length) return NextResponse.json({ error: '联系人不存在' }, { status: 404 });
+  }
+
   const { rows: [{ last_id }] } = await db.execute({
-    sql: `INSERT INTO wechat_chats (customer_id, raw_content, chat_date, analysis_status)
-          VALUES (?, ?, ?, 'pending') RETURNING id as last_id`,
-    args: [id, raw_content, chat_date || null],
+    sql: `INSERT INTO wechat_chats (customer_id, wechat_contact_id, raw_content, chat_date, analysis_status)
+          VALUES (?, ?, ?, ?, 'pending') RETURNING id as last_id`,
+    args: [id, wechat_contact_id || null, raw_content, chat_date || null],
   });
   const chatId = last_id as number;
 

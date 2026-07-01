@@ -17,6 +17,17 @@ interface WeChatChat {
   created_at: string;
 }
 
+interface WeChatContact {
+  id: number;
+  customer_id: number;
+  name: string;
+  wxid: string | null;
+  role: string | null;
+  sort_order: number;
+  chat_count: number;
+  created_at: string;
+}
+
 interface ChatLine { time: string; sender: 'me' | 'other'; text: string; idx: number; }
 
 const INTENT_LABEL: Record<string, { label: string; color: string; bg: string }> = {

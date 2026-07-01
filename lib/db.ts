@@ -76,9 +76,21 @@ export async function ensureDb(): Promise<Client> {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
       )`,
+      `CREATE TABLE IF NOT EXISTS wechat_contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        wxid TEXT,
+        role TEXT,
+        avatar TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+      )`,
       `CREATE TABLE IF NOT EXISTS wechat_chats (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER NOT NULL,
+        wechat_contact_id INTEGER,
         raw_content TEXT NOT NULL,
         summary TEXT,
         next_meeting TEXT,
@@ -89,7 +101,8 @@ export async function ensureDb(): Promise<Client> {
         analysis_status TEXT DEFAULT 'pending',
         chat_date TEXT,
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
-        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        FOREIGN KEY (wechat_contact_id) REFERENCES wechat_contacts(id) ON DELETE SET NULL
       )`,
       `CREATE TABLE IF NOT EXISTS calendar_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,6 +179,7 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE customers ADD COLUMN user_id INTEGER DEFAULT 1'); } catch (_) {}
     try { await db.execute('ALTER TABLE users ADD COLUMN phone TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE users ADD COLUMN email TEXT'); } catch (_) {}
+    try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN wechat_contact_id INTEGER'); } catch (_) {}
     // Seed default customer types if empty
     const { rows } = await db.execute('SELECT COUNT(*) as cnt FROM customer_types');
     if ((rows[0]?.cnt as number) === 0) {
