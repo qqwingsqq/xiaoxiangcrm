@@ -4,11 +4,15 @@
 services:
   - name: crm-app
     type: web
-    # Next.js 项目会自动检测
+    runtime: node
+    buildCommand: npm run build
+    startCommand: bash start.sh
     env:
       # 数据库配置 - 使用本地 SQLite（需要持久化存储）
       # 或者使用 Turso 云数据库（推荐）
       DATABASE_URL: file:/data/local.db
+      DATA_DIR: /data
+      UPLOADS_DIR: /data/uploads
       
       # 认证密钥（部署时需要修改）
       AUTH_SECRET: your-secret-key-change-this
@@ -16,13 +20,8 @@ services:
       # 监控 API 密钥（可选）
       MONITOR_API_KEY: ""
       
-      # AI API 密钥（可选，在设置页面配置）
-      # ANTHROPIC_KEY: ""
-      # OPENAI_KEY: ""
-      
-      # 高德地图密钥（可选，在设置页面配置）
-      # AMAP_KEY: ""
-      # AMAP_SECURITY: ""
+      # Node 环境
+      NODE_ENV: production
     
     # 持久化存储 - 用于 SQLite 数据库和上传文件
     volumes:
