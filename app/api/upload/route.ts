@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { ALLOWED_EXTENSIONS, extractTextFromBuffer, isImageFile } from '@/lib/extract';
 import { analyzeText, analyzeImageFromBuffer } from '@/lib/ai';
+import { getUploadFilePath } from '@/lib/storage';
+import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 export const maxDuration = 60;
 
@@ -30,11 +33,18 @@ export async function POST(request: NextRequest) {
   const { rows: keyRow } = await db.execute({ sql: `SELECT value FROM user_settings WHERE key='anthropic_key'`, args: [] });
   const userApiKey = (keyRow[0]?.value as string) || process.env.ANTHROPIC_API_KEY || '';
 
+  // Generate unique stored name to avoid collisions
+  const storedName = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+
+  // Save file to storage (local ./uploads or /tmp/uploads on Vercel)
+  const filePath = getUploadFilePath(storedName);
+  fs.writeFileSync(filePath, buffer);
+
   // Create document record
   const insertResult = await db.execute({
     sql: `INSERT INTO documents (follow_up_id, customer_id, original_name, stored_name, file_size, analysis_status)
           VALUES (?, ?, ?, ?, ?, 'analyzing')`,
-    args: [followUpId || null, customerId, file.name, file.name, file.size],
+    args: [followUpId || null, customerId, file.name, storedName, file.size],
   });
   const docId = insertResult.lastInsertRowid!;
 

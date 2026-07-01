@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb, Document } from '@/lib/db';
-import { analyzeText, analyzeImage } from '@/lib/ai';
-import { extractText, isImageFile } from '@/lib/extract';
-import path from 'path';
+import { analyzeText, analyzeImageFromBuffer } from '@/lib/ai';
+import { extractTextFromBuffer, isImageFile } from '@/lib/extract';
+import { getUploadFilePath } from '@/lib/storage';
+import fs from 'fs';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,8 +13,11 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const { rows: [doc] } = await db.execute({ sql: 'SELECT * FROM documents WHERE id = ?', args: [id] });
   if (!doc) return NextResponse.json({ error: '文档不存在' }, { status: 404 });
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: '未配置 ANTHROPIC_API_KEY，无法使用 AI 分析' }, { status: 500 });
+  // Get user API key (DB setting overrides env var)
+  const { rows: keyRow } = await db.execute({ sql: `SELECT value FROM user_settings WHERE key='anthropic_key'`, args: [] });
+  const userApiKey = (keyRow[0]?.value as string) || process.env.ANTHROPIC_API_KEY || '';
+  if (!userApiKey) {
+    return NextResponse.json({ error: '未配置 Anthropic API Key，请在设置中添加' }, { status: 500 });
   }
 
   await db.execute({ sql: `UPDATE documents SET analysis_status='analyzing' WHERE id=?`, args: [id] });
@@ -21,18 +25,23 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const typedDoc = doc as unknown as Document;
 
   try {
-    const filePath = path.join(process.cwd(), 'uploads', typedDoc.stored_name);
+    const filePath = getUploadFilePath(typedDoc.stored_name);
+    if (!fs.existsSync(filePath)) {
+      await db.execute({ sql: `UPDATE documents SET analysis_status='error' WHERE id=?`, args: [id] });
+      return NextResponse.json({ error: '文件不存在，无法重新分析（Vercel 临时存储中的文件可能已过期）' }, { status: 400 });
+    }
+    const buffer = fs.readFileSync(filePath);
     let result;
 
     if (isImageFile(typedDoc.original_name)) {
-      result = await analyzeImage(filePath, typedDoc.original_name);
+      result = await analyzeImageFromBuffer(buffer, typedDoc.original_name, userApiKey);
     } else {
-      const text = await extractText(filePath, typedDoc.original_name);
+      const text = await extractTextFromBuffer(buffer, typedDoc.original_name);
       if (!text.trim()) {
         await db.execute({ sql: `UPDATE documents SET analysis_status='error' WHERE id=?`, args: [id] });
         return NextResponse.json({ error: '无法从文档提取文字内容' }, { status: 400 });
       }
-      result = await analyzeText(text, typedDoc.original_name);
+      result = await analyzeText(text, typedDoc.original_name, userApiKey);
     }
 
     await db.execute({

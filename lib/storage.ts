@@ -1,14 +1,21 @@
 // 文件存储路径配置
-// 支持本地开发和云平台部署
+// Vercel 部署：使用 /tmp 临时存储（Vercel 无持久化文件系统）
+// 本地开发：使用 ./uploads
+
+import fs from 'fs';
 
 /**
  * 获取上传文件存储目录
+ * - Vercel 部署: /tmp/uploads（临时存储，函数实例间不共享）
  * - 本地开发: ./uploads
- * - Zeabur/云平台: /data/uploads (持久化存储)
  */
 export function getUploadsDir(): string {
-  const dataDir = process.env.DATA_DIR ?? '/data';
-  const uploadsDir = process.env.UPLOADS_DIR ?? `${dataDir}/uploads`;
+  const isVercel = !!process.env.VERCEL;
+  const uploadsDir = process.env.UPLOADS_DIR ?? (isVercel ? '/tmp/uploads' : './uploads');
+  // 确保目录存在
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
   return uploadsDir;
 }
 
@@ -23,5 +30,9 @@ export function getUploadFilePath(filename: string): string {
  * 获取音频文件存储目录
  */
 export function getAudioDir(): string {
-  return `${getUploadsDir()}/audio`;
+  const dir = `${getUploadsDir()}/audio`;
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
 }

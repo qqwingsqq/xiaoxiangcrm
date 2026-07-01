@@ -7,7 +7,7 @@ export function getDb(): Client {
   if (!_client) {
     // 支持多种数据库配置：
     // 1. Turso 云数据库: TURSO_DATABASE_URL + TURSO_AUTH_TOKEN
-    // 2. Zeabur/其他平台持久化存储: DATABASE_URL=file:/data/local.db
+    // 2. 其他平台: DATABASE_URL 环境变量
     // 3. 本地开发: file:local.db
     const dbUrl = process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? 'file:local.db';
     _client = createClient({
