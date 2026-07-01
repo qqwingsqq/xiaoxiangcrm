@@ -7,9 +7,10 @@ export function getDb(): Client {
   if (!_client) {
     // 支持多种数据库配置：
     // 1. Turso 云数据库: TURSO_DATABASE_URL + TURSO_AUTH_TOKEN
-    // 2. 其他平台: DATABASE_URL 环境变量
-    // 3. 本地开发: file:local.db
-    const dbUrl = process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? 'file:local.db';
+    // 2. Sealos/容器部署: file:/data/crm.db（持久化卷）
+    // 3. 其他平台: DATABASE_URL 环境变量
+    // 4. 本地开发: file:local.db
+    const dbUrl = process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? (process.env.UPLOADS_DIR ? `file:${process.env.UPLOADS_DIR.replace('/uploads','')}/crm.db` : 'file:local.db');
     _client = createClient({
       url: dbUrl,
       authToken: process.env.TURSO_AUTH_TOKEN,
