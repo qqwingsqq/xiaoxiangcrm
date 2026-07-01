@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useSyncExternalStore } from 'react';
+import { usePathname } from 'next/navigation';
 type Device = 'desktop' | 'tablet' | 'mobile';
 
 const DeviceContext = createContext<Device>('desktop');
@@ -10,25 +11,21 @@ export function useDevice() {
   return { device };
 }
 
-// 保留空壳，layout.tsx 里的 <DevicePreviewBar /> 不用改
 export function DevicePreviewBar() {
   return null;
 }
 
-// 获取设备宽度的函数
 function getSnapshot(): number {
   if (typeof window === 'undefined') return 1024;
   return window.innerWidth;
 }
 
-// 订阅函数
 function subscribe(callback: () => void): () => void {
   if (typeof window === 'undefined') return () => {};
   window.addEventListener('resize', callback);
   return () => window.removeEventListener('resize', callback);
 }
 
-// 判断设备类型
 function getDevice(width: number): Device {
   if (width < 768) return 'mobile';
   if (width < 1024) return 'tablet';
@@ -36,11 +33,16 @@ function getDevice(width: number): Device {
 }
 
 export function DevicePreviewWrapper({ children }: { children: React.ReactNode }) {
-  // 使用 useSyncExternalStore 确保 SSR 和客户端一致
+  const pathname = usePathname();
+
+  if (pathname === '/login') {
+    return <>{children}</>;
+  }
+
   const windowWidth = useSyncExternalStore(
     subscribe,
     getSnapshot,
-    () => 1024 // 服务端默认返回 1024 (desktop)
+    () => 1024
   );
 
   const device = getDevice(windowWidth);
