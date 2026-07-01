@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useSyncExternalStore } from 'react';
 type Device = 'desktop' | 'tablet' | 'mobile';
 
 const DeviceContext = createContext<Device>('desktop');
@@ -15,20 +15,35 @@ export function DevicePreviewBar() {
   return null;
 }
 
-export function DevicePreviewWrapper({ children }: { children: React.ReactNode }) {
-  const [device, setDevice] = useState<Device>('desktop');
+// 获取设备宽度的函数
+function getSnapshot(): number {
+  if (typeof window === 'undefined') return 1024;
+  return window.innerWidth;
+}
 
-  useEffect(() => {
-    const update = () => {
-      const w = window.innerWidth;
-      if (w < 768) setDevice('mobile');
-      else if (w < 1024) setDevice('tablet');
-      else setDevice('desktop');
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
+// 订阅函数
+function subscribe(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('resize', callback);
+  return () => window.removeEventListener('resize', callback);
+}
+
+// 判断设备类型
+function getDevice(width: number): Device {
+  if (width < 768) return 'mobile';
+  if (width < 1024) return 'tablet';
+  return 'desktop';
+}
+
+export function DevicePreviewWrapper({ children }: { children: React.ReactNode }) {
+  // 使用 useSyncExternalStore 确保 SSR 和客户端一致
+  const windowWidth = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    () => 1024 // 服务端默认返回 1024 (desktop)
+  );
+
+  const device = getDevice(windowWidth);
 
   const wrapperClass =
     device === 'mobile'
