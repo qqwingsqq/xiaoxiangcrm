@@ -13,6 +13,7 @@ interface Customer {
   contact_info: string | null;
   tags: string;
   created_at: string;
+  last_chat_summary?: string;
 }
 
 interface CustomerType { id: number; key: string; label: string; color: string; }
@@ -143,9 +144,21 @@ export default function CustomersPage() {
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
                     {c.contact_name && <span>{c.contact_name}</span>}
-                    {c.contact_info && <span>{c.contact_info}</span>}
                     {c.address && <span className="hidden sm:inline truncate max-w-xs">{c.address}</span>}
                   </div>
+                </div>
+
+                <div className="flex-shrink-0 text-right" style={{ minWidth: '160px' }}>
+                  {(c as any).last_chat_date ? (
+                    <span className="text-xs" style={{ color: '#60a5fa' }}>{(c as any).last_chat_date}</span>
+                  ) : (
+                    <span className="text-xs text-zinc-600">暂无聊天</span>
+                  )}
+                  {c.last_chat_summary && (
+                    <p className="text-[11px] text-zinc-500 mt-0.5 leading-relaxed" style={{ maxWidth: '200px', textAlign: 'left' }}>
+                      {c.last_chat_summary.replace(/\n/g, ' ').trim().substring(0, 80)}
+                    </p>
+                  )}
                 </div>
 
                 <svg className="w-4 h-4 text-zinc-600 flex-shrink-0 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">

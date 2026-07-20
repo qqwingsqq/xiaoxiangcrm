@@ -95,8 +95,13 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>地址</span>
           {customer.address ? (
-            <div className="flex items-start gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{customer.address}</span>
+              {(customer as any).address_note && (
+                <span className="text-xs px-2 py-0.5 rounded-md flex-shrink-0" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)' }}>
+                  {(customer as any).address_note}
+                </span>
+              )}
               <Link
                 href={`/map?id=${customer.id}`}
                 className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-md flex-shrink-0 transition-colors"

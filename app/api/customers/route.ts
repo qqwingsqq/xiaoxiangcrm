@@ -23,7 +23,52 @@ export async function GET(request: NextRequest) {
   sql += ' ORDER BY created_at DESC';
 
   const { rows } = await db.execute({ sql, args });
-  return NextResponse.json(rows);
+  const enriched = rows as any[];
+
+  // 批量补全聊天统计
+  if (enriched.length > 0) {
+    const customerIds = enriched.map((r: any) => r.id as number);
+    const placeholders = customerIds.map(() => '?').join(',');
+
+    const { rows: chatStats } = await db.execute({
+      sql: `SELECT customer_id, COUNT(*) as chat_count, MAX(chat_date) as last_chat_date FROM wechat_chats WHERE customer_id IN (${placeholders}) GROUP BY customer_id`,
+      args: customerIds,
+    });
+    const statsMap = Object.fromEntries((chatStats as any[]).map((s: any) => [s.customer_id, s]));
+    for (const r of enriched as any[]) {
+      const stats = statsMap[r.id as number];
+      if (stats) {
+        r.last_chat_date = stats.last_chat_date;
+        r.chat_count = stats.chat_count;
+      }
+    }
+
+    // 批量获取每个客户的最近聊天内容
+    const { rows: lastChats } = await db.execute({
+      sql: `SELECT wc.customer_id, wc.raw_content, wc.summary FROM wechat_chats wc
+            INNER JOIN (
+              SELECT customer_id, MAX(chat_date || '-' || created_at) as max_key
+              FROM wechat_chats WHERE customer_id IN (${placeholders})
+              GROUP BY customer_id
+            ) latest ON wc.customer_id = latest.customer_id
+              AND (wc.chat_date || '-' || wc.created_at) = latest.max_key`,
+      args: customerIds,
+    });
+    const chatMap = Object.fromEntries((lastChats as any[]).map(c => [c.customer_id, c]));
+    for (const r of enriched as any[]) {
+      const chat = chatMap[r.id as number];
+      if (chat) {
+        if (chat.summary) {
+          r.last_chat_summary = chat.summary;
+        } else if (chat.raw_content) {
+          const lines = chat.raw_content.split('\n').filter((l: string) => l.trim());
+          r.last_chat_summary = lines.slice(-5).join('\n');
+        }
+      }
+    }
+  }
+
+  return NextResponse.json(enriched);
 }
 
 export async function POST(request: NextRequest) {
