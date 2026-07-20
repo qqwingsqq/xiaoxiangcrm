@@ -307,8 +307,7 @@ export default function WeChatDashboard() {
   const [blName, setBlName]         = useState('');
   const [organizing, setOrganizing] = useState(false);
   const [orgProgress, setOrgProgress] = useState<{ done: number; remaining: number } | null>(null);
-  const [syncing, setSyncing]       = useState(false);
-  const [syncProgress, setSyncProgress] = useState<number | null>(null);
+  // 微信同步说明：手机端通过 realtime-append API 实时推送，无需手动触发
   // 历史记录展开状态
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
   const [history, setHistory]       = useState<Record<number, HistoryChat[]>>({});
@@ -389,38 +388,8 @@ export default function WeChatDashboard() {
   }, []);
   useEffect(() => { if (showBlocklist) loadBlocklist(); }, [showBlocklist, loadBlocklist]);
 
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncProgress(0);
-    try {
-      const res = await fetch('/api/wechat/sync-trigger', { method: 'POST' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || '同步启动失败');
-        setSyncing(false);
-        return;
-      }
-      // 轮询进度
-      const poll = setInterval(async () => {
-        try {
-          const pr = await fetch('/api/wechat/sync-trigger');
-          const data = await pr.json();
-          if (data.progress !== undefined) setSyncProgress(data.progress);
-          if (data.done || data.error) {
-            clearInterval(poll);
-            setSyncing(false);
-            setSyncProgress(null);
-            if (data.error) alert(data.error);
-            else { setNewCount(data.added ?? 0); loadChats(); }
-          }
-        } catch { clearInterval(poll); setSyncing(false); setSyncProgress(null); }
-      }, 2000);
-    } catch {
-      setSyncing(false);
-      setSyncProgress(null);
-      alert('同步启动失败');
-    }
-  };
+  // 同步功能说明：微信聊天记录由手机端通过 realtime-append API 实时推送到服务端
+  // 页面每5秒自动轮询新消息，无需手动同步
 
   const addToBlocklist = async () => {
     if (!blWxid.trim()) return;
@@ -489,16 +458,6 @@ export default function WeChatDashboard() {
           <p className="text-xs text-zinc-500 mt-0.5">汇总所有客户的微信沟通记录与AI提炼结果</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={handleSync} disabled={syncing}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5"
-            style={{ background: syncing ? '#1a365d' : '#2563eb', border: syncing ? '1px solid #3b82f6' : 'none' }}>
-            {syncing ? (
-              <>
-                <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                同步中 {syncProgress !== null ? `${syncProgress}%` : ''}
-              </>
-            ) : '🔄 手动同步微信'}
-          </button>
           {pendingCount > 0 && (
             <button onClick={() => setShowPending(true)}
               className="text-xs px-3 py-1.5 rounded-lg font-medium relative"
