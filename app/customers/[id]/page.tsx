@@ -5,7 +5,7 @@ import DeleteButton from './DeleteButton';
 import FollowUps from './FollowUps';
 import WeChatButton from '../WeChatButton';
 import NavButton from './NavButton';
-import WeChatChats from './WeChatChats';
+import ContactList from './ContactList';
 import WeChatBlockButton from './WeChatBlockButton';
 
 
@@ -84,21 +84,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           </div>
         </div>
 
-        {/* 联系人列表 */}
-        <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
-          <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>联系人</span>
-          <div className="flex flex-wrap gap-2">
-            {contacts.length > 0 ? (contacts as any[]).map((c: any) => (
-              <span key={c.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-                {c.name}{c.is_primary ? ' · 主' : ''}
-                {c.wechat_id && <span className="text-zinc-500">({c.wechat_id})</span>}
-              </span>
-            )) : (
-              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>未填写</span>
-            )}
-          </div>
-        </div>
+        {/* 联系人列表 + 聊天记录 */}
+        <ContactList contacts={contacts as any[]} customerId={customer.id} wechatId={customer.wechat_id as string | null} />
         <Row label="联系方式" value={customer.contact_info} />
         <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>微信号</span>
@@ -137,11 +124,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>最后更新</span>
           <span className="text-sm text-zinc-400">{customer.updated_at}</span>
         </div>
-      </div>
-
-      {/* 微信聊天记录 */}
-      <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-        <WeChatChats customerId={customer.id} />
       </div>
 
       {/* 跟进记录 */}

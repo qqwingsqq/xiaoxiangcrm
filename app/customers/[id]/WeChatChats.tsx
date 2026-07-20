@@ -361,7 +361,7 @@ function ChatCard({ chat, isNew, onDeleted, onAnalyzed }: {
 }
 
 // ── Main component ────────────────────────────────────────────
-export default function WeChatChats({ customerId }: { customerId: number }) {
+export default function WeChatChats({ customerId, selectedContactId }: { customerId: number; selectedContactId?: number | null }) {
   const [chats, setChats]         = useState<WeChatChat[]>([]);
   const [contacts, setContacts]   = useState<WeChatContact[]>([]);
   const [newIds, setNewIds]       = useState<Set<number>>(new Set());
@@ -411,6 +411,13 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
 
   useEffect(() => { loadContacts(); }, [loadContacts]);
   useEffect(() => { load(); }, [load]);
+
+  // 同步外部传入的 selectedContactId
+  useEffect(() => {
+    if (selectedContactId !== undefined) {
+      setActiveContact(selectedContactId ?? 'all');
+    }
+  }, [selectedContactId]);
 
   useEffect(() => {
     const poll = setInterval(async () => {
