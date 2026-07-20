@@ -109,29 +109,47 @@ function CardHeader({ title, action }: { title: string; action?: React.ReactNode
 }
 
 // ── 地址分布 ──────────────────────────────────────────
+function extractCityDistrict(address: string): string {
+  // 去掉省份前缀（如"广东省"）
+  let s = address.replace(/^[^省市自治区]+(?:省|自治区)/, '');
+  // 匹配市+区，如"深圳市宝安区" → "深圳宝安"
+  const match = s.match(/(.+?市)(.+?区)/);
+  if (match) {
+    return match[1].replace('市', '') + match[2].replace('区', '');
+  }
+  // fallback: 如果没有区，只提取市
+  const cityMatch = s.match(/(.+?市)/);
+  if (cityMatch) return cityMatch[1].replace('市', '');
+  // 最终fallback: 取前4字
+  return address.substring(0, 4);
+}
+
 function LocationContent({ locations, colorMap = {} }: { locations: DashData['customerLocations']; colorMap?: Record<string, string> }) {
   const groups: Record<string, typeof locations> = {};
   for (const loc of locations) {
-    const k = loc.address.substring(0, 2);
+    const k = extractCityDistrict(loc.address);
     if (!groups[k]) groups[k] = [];
     groups[k].push(loc);
   }
-  const entries = Object.entries(groups).slice(0, 10);
+  // 按客户数量排序
+  const entries = Object.entries(groups)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 12);
   if (entries.length === 0) return <p className="text-xs text-zinc-600 text-center py-4">暂无地址数据</p>;
   return (
-    <div className="space-y-2 overflow-y-auto flex-1">
+    <div className="space-y-2 overflow-y-auto flex-1 pr-1" style={{ maxHeight: '100%' }}>
       {entries.map(([region, locs]) => (
         <div key={region} className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500 w-8 flex-shrink-0">{region}</span>
+          <span className="text-xs text-zinc-400 w-16 flex-shrink-0 truncate" title={region}>{region}</span>
           <div className="flex flex-wrap gap-1">
-            {locs.slice(0, 3).map(l => (
+            {locs.slice(0, 4).map(l => (
               <Link key={l.id} href={`/customers/${l.id}`}
                 className="text-xs px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity"
                 style={{ background: `${colorMap[l.type] || '#6b7280'}18`, color: colorMap[l.type] || '#9ca3af' }}>
                 {l.name.substring(0, 4)}
               </Link>
             ))}
-            {locs.length > 3 && <span className="text-xs text-zinc-600">+{locs.length - 3}</span>}
+            {locs.length > 4 && <span className="text-xs text-zinc-600">+{locs.length - 4}</span>}
           </div>
         </div>
       ))}
@@ -377,12 +395,14 @@ export default function DashboardPage() {
         </div>
 
         {/* 客户分布 + 地址分布：2列 */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-2xl p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <div className="grid grid-cols-2 gap-2" style={{ height: 220 }}>
+          <div className="rounded-2xl p-3 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold text-white mb-2">客户分布</p>
-            <DonutChart data={data?.customersByType || []} size={64} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            <div className="flex-1 overflow-y-auto">
+              <DonutChart data={data?.customersByType || []} size={64} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            </div>
           </div>
-          <div className="rounded-2xl p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="rounded-2xl p-3 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold text-white mb-2">地址分布 <span className="font-normal text-zinc-500">({data?.customerLocations.length || 0}家)</span></p>
             <LocationContent locations={data?.customerLocations || []} colorMap={typeColorMap} />
           </div>
