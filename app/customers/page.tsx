@@ -148,15 +148,17 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div className="flex-shrink-0 text-right" style={{ minWidth: '160px' }}>
-                  {(c as any).last_chat_date ? (
-                    <span className="text-xs" style={{ color: '#60a5fa' }}>{(c as any).last_chat_date}</span>
-                  ) : (
-                    <span className="text-xs text-zinc-600">暂无聊天</span>
-                  )}
+                <div className="flex-shrink-0 flex flex-col items-end justify-center gap-0.5" style={{ minWidth: '280px', maxWidth: '400px' }}>
+                  <div className="flex items-center justify-end gap-2 w-full">
+                    {(c as any).last_chat_date ? (
+                      <span className="text-[11px]" style={{ color: '#60a5fa' }}>{(c as any).last_chat_date}</span>
+                    ) : (
+                      <span className="text-[11px] text-zinc-600">暂无聊天</span>
+                    )}
+                  </div>
                   {c.last_chat_summary && (
-                    <p className="text-[11px] text-zinc-500 mt-0.5 leading-relaxed" style={{ maxWidth: '200px', textAlign: 'left' }}>
-                      {c.last_chat_summary.replace(/\n/g, ' ').trim().substring(0, 80)}
+                    <p className="text-[11px] text-zinc-500 leading-relaxed w-full" style={{ whiteSpace: 'pre-wrap', textAlign: 'left', maxHeight: '54px', overflow: 'hidden' }}>
+                      {c.last_chat_summary.trim().substring(0, 150)}
                     </p>
                   )}
                 </div>
