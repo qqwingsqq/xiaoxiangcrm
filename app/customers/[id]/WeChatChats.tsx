@@ -5,6 +5,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 interface WeChatChat {
   id: number;
   customer_id: number;
+  contact_id: number | null;
+  contact_name: string | null;
   raw_content: string;
   summary: string | null;
   next_meeting: string | null;
@@ -15,6 +17,7 @@ interface WeChatChat {
   analysis_status: string;
   chat_date: string | null;
   created_at: string;
+  is_group: number;
 }
 
 interface WeChatContact {
@@ -680,13 +683,37 @@ export default function WeChatChats({ customerId }: { customerId: number }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {chats.map(chat => (
-            <ChatCard key={chat.id} chat={chat}
-              isNew={newIds.has(chat.id)}
-              onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
-              onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
-            />
-          ))}
+          {activeContact === 'all' ? (
+            Object.entries(chats.reduce<Record<string, WeChatChat[]>>((acc, chat) => {
+              const name = chat.contact_name || '未关联联系人';
+              acc[name] = acc[name] || [];
+              acc[name].push(chat);
+              return acc;
+            }, {})).map(([name, group]) => (
+              <div key={name} className="space-y-2">
+                <div className="flex items-center gap-2 pt-2">
+                  <span className="text-xs font-medium text-green-400">{name}</span>
+                  <span className="text-xs text-zinc-600">{group.length} 条</span>
+                  <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
+                </div>
+                {group.map(chat => (
+                  <ChatCard key={chat.id} chat={chat}
+                    isNew={newIds.has(chat.id)}
+                    onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
+                    onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
+                  />
+                ))}
+              </div>
+            ))
+          ) : (
+            chats.map(chat => (
+              <ChatCard key={chat.id} chat={chat}
+                isNew={newIds.has(chat.id)}
+                onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
+                onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
+              />
+            ))
+          )}
         </div>
       )}
     </div>

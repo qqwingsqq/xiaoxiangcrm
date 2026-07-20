@@ -49,24 +49,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   });
   if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
-  let sql = 'SELECT * FROM wechat_chats WHERE customer_id = ?';
+  let sql = `SELECT wc.*, cc.name as contact_name, cc.id as contact_id
+             FROM wechat_chats wc
+             LEFT JOIN customer_contacts cc ON cc.id = wc.wechat_contact_id
+             WHERE wc.customer_id = ?`;
   let args: any[] = [id];
 
   if (contactId) {
     if (contactId === 'none') {
-      sql += ' AND wechat_contact_id IS NULL';
+      sql += ' AND wc.wechat_contact_id IS NULL';
     } else {
-      sql += ' AND wechat_contact_id = ?';
+      sql += ' AND wc.wechat_contact_id = ?';
       args.push(contactId);
     }
   }
 
   if (since) {
-    sql += ' AND created_at > ?';
+    sql += ' AND wc.created_at > ?';
     args.push(since);
   }
 
-  sql += ' ORDER BY created_at DESC';
+  sql += ' ORDER BY wc.created_at DESC';
 
   const { rows } = await db.execute({ sql, args });
   return NextResponse.json(rows);

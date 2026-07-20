@@ -23,10 +23,11 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = await ensureDb();
-  const [{ rows: [row] }, { rows: attrRows }, { rows: statusRows }] = await Promise.all([
+  const [{ rows: [row] }, { rows: attrRows }, { rows: statusRows }, { rows: contacts }] = await Promise.all([
     db.execute({ sql: 'SELECT * FROM customers WHERE id = ?', args: [id] }),
     db.execute('SELECT * FROM customer_attributes ORDER BY sort_order, id'),
     db.execute('SELECT * FROM customer_statuses ORDER BY sort_order, id'),
+    db.execute({ sql: 'SELECT * FROM customer_contacts WHERE customer_id = ? ORDER BY is_primary DESC, id', args: [id] }),
   ]);
   if (!row) notFound();
   type AttrRow = { key: string; label: string; color: string };
@@ -44,7 +45,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     <div className="space-y-5">
       {/* 面包屑 */}
       <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-        <Link href="/" className="hover:text-blue-400 transition-colors">客户列表</Link>
+        <Link href="/customers" className="hover:text-blue-400 transition-colors">客户列表</Link>
         <span>›</span>
         <span className="text-zinc-300">{customer.name}</span>
       </div>
@@ -83,7 +84,21 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           </div>
         </div>
 
-        <Row label="联系人" value={customer.contact_name} />
+        {/* 联系人列表 */}
+        <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>联系人</span>
+          <div className="flex flex-wrap gap-2">
+            {contacts.length > 0 ? (contacts as any[]).map((c: any) => (
+              <span key={c.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+                {c.name}{c.is_primary ? ' · 主' : ''}
+                {c.wechat_id && <span className="text-zinc-500">({c.wechat_id})</span>}
+              </span>
+            )) : (
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>未填写</span>
+            )}
+          </div>
+        </div>
         <Row label="联系方式" value={customer.contact_info} />
         <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>微信号</span>
