@@ -5,8 +5,9 @@ import Link from 'next/link';
 interface Contact {
   id: number;
   name: string;
-  wechat_id: string | null;
-  is_primary: number;
+  wxid: string | null;
+  role: string | null;
+  chat_count: number;
 }
 
 export default function ContactList({
@@ -30,8 +31,13 @@ export default function ContactList({
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
             }}>
-            {c.name}{c.is_primary ? ' · 主' : ''}
-            {c.wechat_id && <span className="text-zinc-500">({c.wechat_id})</span>}
+            {c.name}
+            {c.chat_count > 0 && (
+              <span className="ml-1 text-[10px] px-1 rounded-full" style={{ background: 'rgba(59,130,246,0.2)', color: '#60a5fa' }}>
+                {c.chat_count}
+              </span>
+            )}
+            {c.role && <span className="text-zinc-500">·{c.role}</span>}
           </Link>
         )) : (
           <span className="text-sm" style={{ color: 'var(--text-muted)' }}>未填写</span>

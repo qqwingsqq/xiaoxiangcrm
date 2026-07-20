@@ -28,7 +28,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     db.execute({ sql: 'SELECT * FROM customers WHERE id = ?', args: [id] }),
     db.execute('SELECT * FROM customer_attributes ORDER BY sort_order, id'),
     db.execute('SELECT * FROM customer_statuses ORDER BY sort_order, id'),
-    db.execute({ sql: 'SELECT * FROM customer_contacts WHERE customer_id = ? ORDER BY is_primary DESC, id', args: [id] }),
+    db.execute({
+      sql: `SELECT wc.*,
+            (SELECT COUNT(*) FROM wechat_chats wc2 WHERE wc2.wechat_contact_id = wc.id) AS chat_count
+            FROM wechat_contacts wc
+            WHERE wc.customer_id = ?
+            ORDER BY wc.sort_order, wc.id`,
+      args: [id],
+    }),
   ]);
   if (!row) notFound();
   type AttrRow = { key: string; label: string; color: string };

@@ -26,9 +26,9 @@ export default async function ContactDetailPage({
   });
   if (!customer) notFound();
 
-  // 查询联系人信息
+  // 查询联系人信息（从 wechat_contacts 表）
   const { rows: [contact] } = await db.execute({
-    sql: 'SELECT * FROM customer_contacts WHERE id = ? AND customer_id = ?',
+    sql: 'SELECT * FROM wechat_contacts WHERE id = ? AND customer_id = ?',
     args: [contactId, id],
   });
   if (!contact) notFound();
@@ -77,19 +77,19 @@ export default async function ContactDetailPage({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div>
             <span className="text-zinc-500 block mb-1">联系人</span>
-            <span className="text-zinc-200">{contact.name as string}{contact.is_primary ? ' · 主' : ''}</span>
+            <span className="text-zinc-200">{contact.name as string}</span>
           </div>
           <div>
             <span className="text-zinc-500 block mb-1">微信号</span>
-            <span className="text-zinc-200">{(contact.wechat_id as string) || '—'}</span>
+            <span className="text-zinc-200">{(contact.wxid as string) || '—'}</span>
           </div>
           <div>
             <span className="text-zinc-500 block mb-1">职务</span>
             <span className="text-zinc-200">{(contact.role as string) || '—'}</span>
           </div>
           <div>
-            <span className="text-zinc-500 block mb-1">电话</span>
-            <span className="text-zinc-200">{(contact.phone as string) || '—'}</span>
+            <span className="text-zinc-500 block mb-1">聊天记录</span>
+            <span className="text-zinc-200">{chats.length} 条</span>
           </div>
         </div>
       </div>
@@ -97,8 +97,8 @@ export default async function ContactDetailPage({
       {/* 微信聊天记录 */}
       <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-white">微信聊天记录</h2>
-          <span className="text-xs text-zinc-500">{chats.length} 条记录</span>
+          <h2 className="text-sm font-semibold text-white">{contact.name as string} 的微信聊天记录</h2>
+          <span className="text-xs text-zinc-500">{chats.length} 条</span>
         </div>
 
         {chats.length === 0 ? (

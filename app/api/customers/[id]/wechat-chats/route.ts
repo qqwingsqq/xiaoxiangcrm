@@ -49,9 +49,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   });
   if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
-  let sql = `SELECT wc.*, cc.name as contact_name, cc.id as contact_id
+  let sql = `SELECT wc.*, wc2.name as contact_name
              FROM wechat_chats wc
-             LEFT JOIN customer_contacts cc ON cc.id = wc.wechat_contact_id
+             LEFT JOIN wechat_contacts wc2 ON wc2.id = wc.wechat_contact_id
              WHERE wc.customer_id = ?`;
   let args: any[] = [id];
 
