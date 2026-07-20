@@ -148,7 +148,7 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div className="flex-shrink-0 flex flex-col justify-center" style={{ width: '320px', height: '68px' }}>
+                <div className="flex-shrink-0 flex flex-col justify-center" style={{ width: '380px', minHeight: '48px' }}>
                   <div className="flex items-center gap-2 w-full">
                     {(c as any).last_chat_date ? (
                       <span className="text-[11px] ml-0.5" style={{ color: '#60a5fa' }}>{(c as any).last_chat_date}</span>
@@ -157,8 +157,8 @@ export default function CustomersPage() {
                     )}
                   </div>
                   {c.last_chat_summary ? (
-                    <p className="text-[11px] text-zinc-500 leading-relaxed mt-0.5 line-clamp-3 w-full" style={{ textAlign: 'left' }}>
-                      {c.last_chat_summary.trim().substring(0, 150)}
+                    <p className="text-[11px] text-zinc-500 leading-relaxed mt-0.5 w-full" style={{ textAlign: 'left', whiteSpace: 'pre-wrap', maxHeight: '80px', overflow: 'hidden' }}>
+                      {c.last_chat_summary.trim().substring(0, 200)}
                     </p>
                   ) : (
                     <p className="text-[11px] text-zinc-600 mt-0.5 leading-relaxed w-full text-left">—</p>

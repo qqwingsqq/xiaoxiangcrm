@@ -691,19 +691,61 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
       ) : (
         <div className="space-y-3">
           {activeContact === 'all' ? (
+            // 全部模式：先按联系人分组，再按日期分组
             Object.entries(chats.reduce<Record<string, WeChatChat[]>>((acc, chat) => {
               const name = chat.contact_name || '未关联联系人';
               acc[name] = acc[name] || [];
               acc[name].push(chat);
               return acc;
-            }, {})).map(([name, group]) => (
-              <div key={name} className="space-y-2">
-                <div className="flex items-center gap-2 pt-2">
-                  <span className="text-xs font-medium text-green-400">{name}</span>
-                  <span className="text-xs text-zinc-600">{group.length} 条</span>
+            }, {})).map(([name, group]) => {
+              // 每个联系人内部按日期分组
+              const byDate = group.reduce<Record<string, WeChatChat[]>>((acc, chat) => {
+                const date = chat.chat_date || chat.created_at.substring(0, 10);
+                acc[date] = acc[date] || [];
+                acc[date].push(chat);
+                return acc;
+              }, {});
+              return (
+                <div key={name} className="space-y-2">
+                  {/* 联系人分隔 */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="text-xs font-medium text-green-400">{name}</span>
+                    <span className="text-xs text-zinc-600">{group.length} 条</span>
+                    <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
+                  </div>
+                  {/* 日期分组 */}
+                  {Object.entries(byDate).map(([date, dayChats]) => (
+                    <div key={date} className="space-y-2 pl-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-zinc-600 px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-input)' }}>{date}</span>
+                        <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
+                      </div>
+                      {dayChats.map(chat => (
+                        <ChatCard key={chat.id} chat={chat}
+                          isNew={newIds.has(chat.id)}
+                          onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
+                          onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              );
+            })
+          ) : (
+            // 筛选模式：按日期分组
+            Object.entries(chats.reduce<Record<string, WeChatChat[]>>((acc, chat) => {
+              const date = chat.chat_date || chat.created_at.substring(0, 10);
+              acc[date] = acc[date] || [];
+              acc[date].push(chat);
+              return acc;
+            }, {})).map(([date, dayChats]) => (
+              <div key={date} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-600 px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-input)' }}>{date}</span>
                   <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
                 </div>
-                {group.map(chat => (
+                {dayChats.map(chat => (
                   <ChatCard key={chat.id} chat={chat}
                     isNew={newIds.has(chat.id)}
                     onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
@@ -711,14 +753,6 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
                   />
                 ))}
               </div>
-            ))
-          ) : (
-            chats.map(chat => (
-              <ChatCard key={chat.id} chat={chat}
-                isNew={newIds.has(chat.id)}
-                onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
-                onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
-              />
             ))
           )}
         </div>

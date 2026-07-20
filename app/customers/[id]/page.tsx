@@ -6,6 +6,7 @@ import FollowUps from './FollowUps';
 import WeChatButton from '../WeChatButton';
 import NavButton from './NavButton';
 import ContactList from './ContactList';
+import WeChatChats from './WeChatChats';
 import WeChatBlockButton from './WeChatBlockButton';
 
 
@@ -84,8 +85,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           </div>
         </div>
 
-        {/* 联系人列表 + 聊天记录 */}
-        <ContactList contacts={contacts as any[]} customerId={customer.id} wechatId={customer.wechat_id as string | null} />
         <Row label="联系方式" value={customer.contact_info} />
         <div className="flex gap-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>微信号</span>
@@ -124,6 +123,16 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <span className="w-20 flex-shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>最后更新</span>
           <span className="text-sm text-zinc-400">{customer.updated_at}</span>
         </div>
+      </div>
+
+      {/* 联系人列表 */}
+      <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <ContactList contacts={contacts as any[]} customerId={customer.id} />
+      </div>
+
+      {/* 微信聊天记录 */}
+      <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <WeChatChats customerId={customer.id} />
       </div>
 
       {/* 跟进记录 */}
