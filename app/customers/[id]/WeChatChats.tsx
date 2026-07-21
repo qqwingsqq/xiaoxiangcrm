@@ -451,15 +451,17 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.raw_content.trim()) return;
+    if (!form.wechat_contact_id) {
+      alert('请选择所属联系人');
+      return;
+    }
     setSaving(true);
     const body: Record<string, any> = {
       raw_content: form.raw_content,
       chat_date: form.chat_date || null,
+      wechat_contact_id: Number(form.wechat_contact_id),
       auto_analyze: true,
     };
-    if (form.wechat_contact_id && form.wechat_contact_id !== 'none') {
-      body.wechat_contact_id = Number(form.wechat_contact_id);
-    }
     const res = await fetch(`/api/customers/${customerId}/wechat-chats`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -691,15 +693,25 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
             <p className="text-xs text-green-400 font-medium">粘贴微信聊天记录，AI将自动提炼关键信息</p>
           </div>
           <div>
-            <label className="text-xs text-zinc-500 mb-1 block">所属联系人</label>
-            <select value={form.wechat_contact_id}
-              onChange={e => setForm(f => ({ ...f, wechat_contact_id: e.target.value }))}
-              className={inputCls} style={inputStyle}>
-              <option value="">— 不指定（未分类）—</option>
-              {contacts.map(c => (
-                <option key={c.id} value={c.id}>{displayName(c)}</option>
-              ))}
-            </select>
+            <label className="text-xs text-zinc-500 mb-1 block">所属联系人 <span className="text-red-400">*</span></label>
+            {contacts.length > 0 ? (
+              <select value={form.wechat_contact_id}
+                onChange={e => setForm(f => ({ ...f, wechat_contact_id: e.target.value }))}
+                className={inputCls} style={inputStyle}>
+                <option value="">— 请选择联系人 —</option>
+                {contacts.map(c => (
+                  <option key={c.id} value={c.id}>{displayName(c)}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500">暂无联系人，请先</span>
+                <button type="button" onClick={() => { setShowAdd(false); setShowAddContact(true); }}
+                  className="text-xs text-blue-400 hover:text-blue-300">
+                  添加联系人
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <label className="text-xs text-zinc-500 mb-1 block">聊天日期（可选）</label>
@@ -728,6 +740,25 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
             </button>
           </div>
         </form>
+      )}
+
+      {!contactsLoading && contacts.length === 0 && (
+        <div className="rounded-xl p-6 mb-4 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.1)' }}>
+            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+          </div>
+          <p className="text-sm text-zinc-300 mb-1">请先添加微信联系人</p>
+          <p className="text-xs text-zinc-500 mb-4">聊天记录需要关联到具体的联系人才能正确分类</p>
+          <button
+            onClick={() => setShowAddContact(true)}
+            className="text-xs px-4 py-2 rounded-lg font-medium text-white transition-colors"
+            style={{ background: '#1d4ed8' }}
+          >
+            + 添加微信联系人
+          </button>
+        </div>
       )}
 
       {!contactsLoading && contacts.length > 0 && (
@@ -769,7 +800,7 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
 
       {loading ? (
         <p className="text-sm text-center py-8 text-zinc-600">加载中...</p>
-      ) : chats.length === 0 ? (
+      ) : !contactsLoading && contacts.length === 0 ? null : chats.length === 0 ? (
         <div className="text-center py-10 rounded-xl" style={{ background: '#1c1c1f', border: '1px solid var(--border)' }}>
           <p className="text-sm text-zinc-600">暂无微信聊天记录，点击「导入聊天」粘贴内容</p>
         </div>
