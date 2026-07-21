@@ -582,56 +582,80 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
           style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <p className="text-xs font-medium text-white">添加微信联系人</p>
 
-          {/* 未关联记录参考 */}
-          {(() => {
-            const unlinked = chats.filter(c => !c.contact_name);
-            if (unlinked.length === 0) return null;
-            // 提取 raw_content 中可能的名字（匹配 [时间] 后面的第一个词）
-            const nameSet = new Set<string>();
-            unlinked.forEach(c => {
-              const matches = c.raw_content.match(/\[\d{1,2}:\d{2}(?::\d{2})?\]\s*(?:我\s+)?(\S{2,15})/g);
-              if (matches) {
-                matches.forEach(m => {
-                  const nameMatch = m.match(/\]\s*(?:我\s+)?(\S{2,15})$/);
-                  if (nameMatch) {
-                    const name = nameMatch[1].trim();
-                    if (name && name.length >= 2 && name.length <= 15 && !['我', '对方', '图片', '语音', '视频', '文件'].includes(name)) {
-                      nameSet.add(name);
-                    }
-                  }
-                });
-              }
-            });
-            const suggestions = Array.from(nameSet).slice(0, 8);
-            return (
-              <div className="rounded-lg p-2.5 space-y-1.5" style={{ background: 'var(--bg-inner)' }}>
-                <p className="text-[11px] text-zinc-500">从 {unlinked.length} 条未关联记录中提取的参考名字（点击填入）：</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {suggestions.map(name => (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => setNewContactForm(f => ({ ...f, name }))}
-                      className="text-[11px] px-2 py-0.5 rounded transition-colors hover:opacity-80"
-                      style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}
-                    >
-                      {name}
-                    </button>
-                  ))}
-                  {suggestions.length === 0 && (
-                    <span className="text-[11px] text-zinc-600">未能自动提取，请手动输入</span>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          <div>
+          <div className="relative">
             <label className="text-xs text-zinc-500 mb-1 block">姓名 <span className="text-red-400">*</span></label>
             <input type="text" value={newContactForm.name}
               onChange={e => setNewContactForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="联系人姓名"
+              placeholder="输入姓名，自动搜索匹配的聊天记录..."
               className={inputCls} style={inputStyle} autoFocus />
+
+            {/* 实时搜索建议：过滤参考名字 + 聊天记录预览 */}
+            {newContactForm.name.trim().length >= 1 && (() => {
+              const keyword = newContactForm.name.trim().toLowerCase();
+              const unlinked = chats.filter(c => !c.contact_name);
+
+              // 1. 从参考名字中过滤匹配项
+              const nameSet = new Set<string>();
+              unlinked.forEach(c => {
+                const matches = c.raw_content.match(/\[\d{1,2}:\d{2}(?::\d{2})?\]\s*(?:我\s+)?(\S{2,15})/g);
+                if (matches) {
+                  matches.forEach(m => {
+                    const nameMatch = m.match(/\]\s*(?:我\s+)?(\S{2,15})$/);
+                    if (nameMatch) {
+                      const name = nameMatch[1].trim();
+                      if (name && name.length >= 2 && name.length <= 15 && !['我', '对方', '图片', '语音', '视频', '文件'].includes(name)) {
+                        nameSet.add(name);
+                      }
+                    }
+                  });
+                }
+              });
+              const matchedNames = Array.from(nameSet).filter(n => n.toLowerCase().includes(keyword));
+
+              // 2. 从聊天记录中搜索包含关键字的记录
+              const matchedChats = unlinked
+                .filter(c => c.raw_content.toLowerCase().includes(keyword))
+                .slice(0, 5);
+
+              if (matchedNames.length === 0 && matchedChats.length === 0) return null;
+
+              return (
+                <div className="absolute z-10 left-0 right-0 mt-1 rounded-lg overflow-hidden shadow-lg"
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                  {matchedNames.length > 0 && (
+                    <div className="p-2 border-b" style={{ borderColor: 'var(--border)' }}>
+                      <p className="text-[10px] text-zinc-500 mb-1">参考名字</p>
+                      <div className="flex flex-wrap gap-1">
+                        {matchedNames.map(name => (
+                          <button
+                            key={name}
+                            type="button"
+                            onClick={() => setNewContactForm(f => ({ ...f, name }))}
+                            className="text-[11px] px-2 py-0.5 rounded hover:opacity-80 transition-opacity"
+                            style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {matchedChats.length > 0 && (
+                    <div className="p-2 max-h-40 overflow-y-auto">
+                      <p className="text-[10px] text-zinc-500 mb-1">相关聊天记录</p>
+                      {matchedChats.map(chat => (
+                        <div key={chat.id} className="text-[11px] text-zinc-400 py-1 px-1.5 rounded hover:bg-zinc-800 cursor-pointer truncate"
+                          onClick={() => setNewContactForm(f => ({ ...f, name: f.name || keyword }))}>
+                          <span className="text-zinc-500">{chat.chat_date || chat.created_at.substring(0, 10)}</span>
+                          {' · '}
+                          {chat.raw_content.substring(0, 80)}...
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
