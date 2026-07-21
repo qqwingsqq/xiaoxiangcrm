@@ -482,14 +482,31 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
     e.preventDefault();
     if (!newContactForm.name.trim()) return;
     setContactSaving(true);
+    const body = { name: newContactForm.name, wxid: newContactForm.wxid, role: newContactForm.role };
     const res = await fetch(`/api/customers/${customerId}/wechat-contacts`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(newContactForm),
+      body:    JSON.stringify(body),
     });
     if (res.ok) {
       const created: WeChatContact = await res.json();
       setContacts(c => [...c, created]);
+
+      // 如果勾选了关联未分类记录
+      const shouldLink = (newContactForm as any)._linkUnlinked;
+      if (shouldLink) {
+        const unlinkedChats = chats.filter(c => !c.contact_name);
+        for (const chat of unlinkedChats) {
+          await fetch(`/api/customers/${customerId}/wechat-chats/${chat.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wechat_contact_id: created.id }),
+          });
+        }
+        // 刷新聊天记录
+        setChats(c => c.map(x => x.contact_name ? x : { ...x, contact_id: created.id, contact_name: created.name }));
+      }
+
       setNewContactForm({ name: '', wxid: '', role: '' });
       setShowAddContact(false);
       setActiveContact(created.id);
@@ -562,6 +579,51 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
         <form onSubmit={handleAddContact} className="rounded-xl p-4 mb-4 space-y-3"
           style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <p className="text-xs font-medium text-white">添加微信联系人</p>
+
+          {/* 未关联记录参考 */}
+          {(() => {
+            const unlinked = chats.filter(c => !c.contact_name);
+            if (unlinked.length === 0) return null;
+            // 提取 raw_content 中可能的名字（匹配 [时间] 后面的第一个词）
+            const nameSet = new Set<string>();
+            unlinked.forEach(c => {
+              const matches = c.raw_content.match(/\[\d{1,2}:\d{2}(?::\d{2})?\]\s*(?:我\s+)?(\S{2,15})/g);
+              if (matches) {
+                matches.forEach(m => {
+                  const nameMatch = m.match(/\]\s*(?:我\s+)?(\S{2,15})$/);
+                  if (nameMatch) {
+                    const name = nameMatch[1].trim();
+                    if (name && name.length >= 2 && name.length <= 15 && !['我', '对方', '图片', '语音', '视频', '文件'].includes(name)) {
+                      nameSet.add(name);
+                    }
+                  }
+                });
+              }
+            });
+            const suggestions = Array.from(nameSet).slice(0, 8);
+            return (
+              <div className="rounded-lg p-2.5 space-y-1.5" style={{ background: 'var(--bg-inner)' }}>
+                <p className="text-[11px] text-zinc-500">从 {unlinked.length} 条未关联记录中提取的参考名字（点击填入）：</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.map(name => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setNewContactForm(f => ({ ...f, name }))}
+                      className="text-[11px] px-2 py-0.5 rounded transition-colors hover:opacity-80"
+                      style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                  {suggestions.length === 0 && (
+                    <span className="text-[11px] text-zinc-600">未能自动提取，请手动输入</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <div>
             <label className="text-xs text-zinc-500 mb-1 block">姓名 <span className="text-red-400">*</span></label>
             <input type="text" value={newContactForm.name}
@@ -585,6 +647,27 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
                 className={inputCls} style={inputStyle} />
             </div>
           </div>
+
+          {/* 关联未分类记录选项 */}
+          {chats.some(c => !c.contact_name) && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="link-unlinked"
+                className="rounded border-zinc-600"
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    // 创建联系人后关联所有未分类记录
+                    setNewContactForm(f => ({ ...f, _linkUnlinked: true }));
+                  }
+                }}
+              />
+              <label htmlFor="link-unlinked" className="text-[11px] text-zinc-400">
+                创建后自动关联所有未分类的聊天记录
+              </label>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button type="submit" disabled={contactSaving || !newContactForm.name.trim()}
               className="px-4 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors text-white"
@@ -743,45 +826,55 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
                                 onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
                                 onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
                               />
-                              {/* 未关联联系人时显示关联按钮 */}
-                              {name === '未关联联系人' && contacts.length > 0 && (
+                              {/* 未关联联系人时显示关联按钮或添加快捷入口 */}
+                              {name === '未关联联系人' && (
                                 <div className="mt-1 flex items-center gap-2">
-                                  {linkingChat === chat.id ? (
-                                    <div className="flex items-center gap-2">
-                                      <select
-                                        className="text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
-                                        onChange={async (e) => {
-                                          const contactId = e.target.value;
-                                          if (!contactId) return;
-                                          try {
-                                            const res = await fetch(`/api/customers/${customerId}/wechat-chats/${chat.id}`, {
-                                              method: 'PATCH',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ wechat_contact_id: contactId }),
-                                            });
-                                            if (res.ok) {
-                                              setChats(c => c.map(x => x.id === chat.id ? { ...x, contact_id: Number(contactId), contact_name: contacts.find(ct => ct.id === Number(contactId))?.name || null } : x));
+                                  {contacts.length > 0 ? (
+                                    linkingChat === chat.id ? (
+                                      <div className="flex items-center gap-2">
+                                        <select
+                                          className="text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
+                                          onChange={async (e) => {
+                                            const contactId = e.target.value;
+                                            if (!contactId) return;
+                                            try {
+                                              const res = await fetch(`/api/customers/${customerId}/wechat-chats/${chat.id}`, {
+                                                method: 'PATCH',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ wechat_contact_id: contactId }),
+                                              });
+                                              if (res.ok) {
+                                                setChats(c => c.map(x => x.id === chat.id ? { ...x, contact_id: Number(contactId), contact_name: contacts.find(ct => ct.id === Number(contactId))?.name || null } : x));
+                                              }
+                                            } finally {
+                                              setLinkingChat(null);
                                             }
-                                          } finally {
-                                            setLinkingChat(null);
-                                          }
-                                        }}
-                                        autoFocus
+                                          }}
+                                          autoFocus
+                                        >
+                                          <option value="">选择联系人</option>
+                                          {contacts.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                          ))}
+                                        </select>
+                                        <button onClick={() => setLinkingChat(null)} className="text-[11px] text-zinc-500">取消</button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => setLinkingChat(chat.id)}
+                                        className="text-[11px] px-2 py-0.5 rounded text-blue-400 hover:text-blue-300 transition-colors"
+                                        style={{ background: 'rgba(59,130,246,0.1)' }}
                                       >
-                                        <option value="">选择联系人</option>
-                                        {contacts.map(c => (
-                                          <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
-                                      </select>
-                                      <button onClick={() => setLinkingChat(null)} className="text-[11px] text-zinc-500">取消</button>
-                                    </div>
+                                        关联到联系人
+                                      </button>
+                                    )
                                   ) : (
                                     <button
-                                      onClick={() => setLinkingChat(chat.id)}
+                                      onClick={() => { setShowAddContact(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                                       className="text-[11px] px-2 py-0.5 rounded text-blue-400 hover:text-blue-300 transition-colors"
                                       style={{ background: 'rgba(59,130,246,0.1)' }}
                                     >
-                                      关联到联系人
+                                      先添加联系人 →
                                     </button>
                                   )}
                                 </div>
