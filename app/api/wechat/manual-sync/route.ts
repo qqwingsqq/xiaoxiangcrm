@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { getMonitorUserId, getSessionUser } from '@/lib/auth';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const userId = getMonitorUserId(req) ?? getSessionUser(req)?.id;
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
