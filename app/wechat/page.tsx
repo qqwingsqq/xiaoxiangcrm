@@ -34,23 +34,6 @@ interface HistoryChat {
   raw_content: string;
 }
 
-interface PendingContact {
-  id: number;
-  name: string;
-  contact_info: string;
-  chat_count: number;
-  created_at: string;
-  latest_chat: string | null;
-  latest_date: string | null;
-}
-
-interface CustomerSearchResult {
-  id: number;
-  name: string;
-  type: string | null;
-  contact_info: string | null;
-}
-
 interface BlocklistItem { id: number; wxid: string; name: string; created_at: string; }
 
 // ── Constants ─────────────────────────────────────────────────
@@ -86,211 +69,6 @@ function extractLastMessages(raw: string): { lastMine: string | null; lastTheirs
   return { lastMine, lastTheirs };
 }
 
-// ── ChatPreview（待关联弹窗里的聊天快照）────────────────────────
-function ChatPreview({ raw }: { raw: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const allLines = raw.split('\n').filter(l => l.trim());
-  const lines = allLines.slice(0, expanded ? 50 : 8);
-  return (
-    <div className="rounded-lg overflow-hidden" style={{ background: '#0f0f11', border: '1px solid #222' }}>
-      <div className="px-3 py-2 space-y-1">
-        {lines.map((line, i) => {
-          const m = line.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(我|对方)[:：]\s*(.+)$/);
-          if (m) {
-            const isMe = m[2] === '我';
-            return (
-              <div key={i} className={`flex gap-1.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-                <span className="text-[10px] flex-shrink-0 mt-0.5" style={{ color: isMe ? '#60a5fa' : '#4ade80' }}>
-                  {isMe ? '我' : '他'}
-                </span>
-                <span className="text-xs text-zinc-300 leading-relaxed">{m[3]}</span>
-                <span className="text-[10px] text-zinc-700 flex-shrink-0 mt-0.5">{m[1]}</span>
-              </div>
-            );
-          }
-          return <p key={i} className="text-xs text-zinc-600">{line}</p>;
-        })}
-      </div>
-      {allLines.length > 8 && (
-        <button onClick={() => setExpanded(e => !e)}
-          className="w-full py-1 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors border-t"
-          style={{ borderColor: '#222' }}>
-          {expanded ? '收起' : `展开全部 ${allLines.length} 条`}
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── PendingContactsModal ──────────────────────────────────────
-function PendingContactsModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [contacts, setContacts] = useState<PendingContact[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [mode, setMode]         = useState<Record<number, 'idle' | 'link' | 'rename'>>({});
-  const [renameVal, setRenameVal] = useState<Record<number, string>>({});
-  const [searchQ, setSearchQ]   = useState<Record<number, string>>({});
-  const [searchRes, setSearchRes] = useState<Record<number, CustomerSearchResult[]>>({});
-  const [searching, setSearching] = useState<Record<number, boolean>>({});
-  const [working, setWorking]   = useState<Record<number, boolean>>({});
-
-  const load = async () => {
-    setLoading(true);
-    const res = await fetch('/api/wechat/pending-contacts');
-    setContacts(await res.json());
-    setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
-
-  const searchCustomers = async (contactId: number, q: string) => {
-    setSearchQ(prev => ({ ...prev, [contactId]: q }));
-    if (q.trim().length < 1) { setSearchRes(prev => ({ ...prev, [contactId]: [] })); return; }
-    setSearching(prev => ({ ...prev, [contactId]: true }));
-    const res = await fetch(`/api/customers?search=${encodeURIComponent(q)}&limit=8`);
-    const data = await res.json();
-    setSearchRes(prev => ({ ...prev, [contactId]: data.customers || data }));
-    setSearching(prev => ({ ...prev, [contactId]: false }));
-  };
-
-  const doLink = async (contact: PendingContact, targetId: number, targetName: string) => {
-    if (!confirm(`将微信号 ${contact.contact_info} 的聊天记录合并到「${targetName}」？原条目将被删除。`)) return;
-    setWorking(prev => ({ ...prev, [contact.id]: true }));
-    await fetch('/api/wechat/link-contact', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'link', source_customer_id: contact.id, target_customer_id: targetId }),
-    });
-    setContacts(prev => prev.filter(c => c.id !== contact.id));
-    setWorking(prev => ({ ...prev, [contact.id]: false }));
-    onDone();
-  };
-
-  const doBlock = async (contact: PendingContact) => {
-    setWorking(prev => ({ ...prev, [contact.id]: true }));
-    await fetch('/api/wechat/blocklist', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wxid: contact.contact_info, name: contact.name }),
-    });
-    setContacts(prev => prev.filter(c => c.id !== contact.id));
-    setWorking(prev => ({ ...prev, [contact.id]: false }));
-    onDone();
-  };
-
-  const doRename = async (contact: PendingContact) => {
-    const name = renameVal[contact.id]?.trim();
-    if (!name) return;
-    setWorking(prev => ({ ...prev, [contact.id]: true }));
-    try {
-      const res = await fetch('/api/wechat/link-contact', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'rename', customer_id: contact.id, name }),
-      });
-      const data = await res.json();
-      if (!res.ok) { alert(`保存失败：${data.error || res.status}`); return; }
-      setContacts(prev => prev.filter(c => c.id !== contact.id));
-      onDone();
-    } catch (e) {
-      alert(`网络错误：${e}`);
-    } finally {
-      setWorking(prev => ({ ...prev, [contact.id]: false }));
-    }
-  };
-
-  const inputCls = 'w-full px-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
-  const inputStyle = { background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.75)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-lg rounded-2xl flex flex-col"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', maxHeight: '85vh' }}>
-        <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div>
-            <h2 className="text-base font-semibold text-white">👤 待关联微信联系人</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">这些联系人名字未识别，请关联到已有客户或设置名字</p>
-          </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white text-lg ml-4">✕</button>
-        </div>
-        <div className="overflow-y-auto flex-1 p-4 space-y-3">
-          {loading ? (
-            <p className="text-sm text-zinc-600 text-center py-8">加载中...</p>
-          ) : contacts.length === 0 ? (
-            <p className="text-sm text-zinc-600 text-center py-8">🎉 所有联系人已关联，无待处理项</p>
-          ) : contacts.map(contact => {
-            const m = mode[contact.id] || 'idle';
-            const busy = working[contact.id];
-            return (
-              <div key={contact.id} className="rounded-xl p-4 space-y-3"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-zinc-400 truncate">{contact.contact_info}</p>
-                    <p className="text-xs text-zinc-600 mt-0.5">{contact.chat_count} 条聊天 · {(contact.latest_date || contact.created_at).substring(0, 10)}</p>
-                  </div>
-                  {m === 'idle' && (
-                    <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
-                      <button onClick={() => setMode(prev => ({ ...prev, [contact.id]: 'link' }))}
-                        className="text-xs px-2.5 py-1 rounded-lg font-medium text-white"
-                        style={{ background: '#1d4ed8' }}>关联客户</button>
-                      <button onClick={() => setMode(prev => ({ ...prev, [contact.id]: 'rename' }))}
-                        className="text-xs px-2.5 py-1 rounded-lg font-medium text-zinc-300"
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border)' }}>新客户</button>
-                      <button onClick={() => doBlock(contact)} disabled={busy}
-                        className="text-xs px-2.5 py-1 rounded-lg font-medium disabled:opacity-50"
-                        style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.3)', color: '#f87171' }}>🚫 屏蔽</button>
-                    </div>
-                  )}
-                </div>
-                {contact.latest_chat && <ChatPreview raw={contact.latest_chat} />}
-                {m === 'link' && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-zinc-400">搜索已有客户，将此联系人的聊天记录合并过去：</p>
-                    <input type="text" placeholder="输入客户名搜索..."
-                      value={searchQ[contact.id] || ''}
-                      onChange={e => searchCustomers(contact.id, e.target.value)}
-                      className={inputCls} style={inputStyle} autoFocus />
-                    {searching[contact.id] && <p className="text-xs text-zinc-600">搜索中...</p>}
-                    {(searchRes[contact.id] || []).map(c => (
-                      <button key={c.id} disabled={busy} onClick={() => doLink(contact, c.id, c.name)}
-                        className="w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between gap-2 disabled:opacity-50"
-                        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                        <div>
-                          <p className="text-sm text-white">{c.name}</p>
-                          {c.contact_info && <p className="text-xs text-zinc-600">{c.contact_info}</p>}
-                        </div>
-                        <span className="text-xs text-blue-400 flex-shrink-0">合并 →</span>
-                      </button>
-                    ))}
-                    <button onClick={() => setMode(prev => ({ ...prev, [contact.id]: 'idle' }))}
-                      className="text-xs text-zinc-600 hover:text-zinc-400">取消</button>
-                  </div>
-                )}
-                {m === 'rename' && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-zinc-400">输入这个联系人的真实姓名，作为新客户保存：</p>
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="客户姓名"
-                        value={renameVal[contact.id] || ''}
-                        onChange={e => setRenameVal(prev => ({ ...prev, [contact.id]: e.target.value }))}
-                        onKeyDown={e => e.key === 'Enter' && doRename(contact)}
-                        className={inputCls} style={inputStyle} autoFocus />
-                      <button disabled={busy || !renameVal[contact.id]?.trim()}
-                        onClick={() => doRename(contact)}
-                        className="px-3 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-50 flex-shrink-0"
-                        style={{ background: '#16a34a' }}>{busy ? '…' : '确认'}</button>
-                    </div>
-                    <button onClick={() => setMode(prev => ({ ...prev, [contact.id]: 'idle' }))}
-                      className="text-xs text-zinc-600 hover:text-zinc-400">取消</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────
 export default function WeChatDashboard() {
   const [chats, setChats]           = useState<ChatRow[]>([]);
@@ -299,9 +77,9 @@ export default function WeChatDashboard() {
   const [chatType, setChatType]     = useState<'all' | 'private' | 'group'>('all');
   const [search, setSearch]         = useState('');
   const [newCount, setNewCount]     = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [showPending, setShowPending]   = useState(false);
   const [showBlocklist, setShowBlocklist] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ added: number; skipped: number } | null>(null);
   const [blocklist, setBlocklist]   = useState<BlocklistItem[]>([]);
   const [blWxid, setBlWxid]         = useState('');
   const [blName, setBlName]         = useState('');
@@ -320,13 +98,7 @@ export default function WeChatDashboard() {
       .then((d: ChatRow[]) => { setChats(d); setLoading(false); });
   }, []);
 
-  const loadPendingCount = useCallback(() => {
-    fetch('/api/wechat/pending-contacts')
-      .then(r => r.json())
-      .then((d: PendingContact[]) => setPendingCount(d.length));
-  }, []);
-
-  useEffect(() => { loadChats(); loadPendingCount(); }, [loadChats, loadPendingCount]);
+  useEffect(() => { loadChats(); }, [loadChats]);
 
   useEffect(() => {
     const poll = setInterval(async () => {
@@ -341,11 +113,10 @@ export default function WeChatDashboard() {
           const fresh = rows.filter(r => !ids.has(r.id)).map(r => ({ ...r, isNew: true }));
           return [...fresh, ...prev];
         });
-        loadPendingCount();
       }
     }, 30_000);
     return () => clearInterval(poll);
-  }, [loadPendingCount]);
+  }, []);
 
   const toggleHistory = useCallback(async (customerId: number) => {
     if (expandedHistory === customerId) {
@@ -458,14 +229,37 @@ export default function WeChatDashboard() {
           <p className="text-xs text-zinc-500 mt-0.5">汇总所有客户的微信沟通记录与AI提炼结果</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {pendingCount > 0 && (
-            <button onClick={() => setShowPending(true)}
-              className="text-xs px-3 py-1.5 rounded-lg font-medium relative"
-              style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)', color: '#fbbf24' }}>
-              👤 待关联
-              <span className="ml-1.5 text-[10px] px-1 rounded-full font-bold"
-                style={{ background: '#fbbf24', color: '#000' }}>{pendingCount}</span>
-            </button>
+          <button onClick={async () => {
+            setSyncing(true);
+            setSyncResult(null);
+            try {
+              const res = await fetch('/api/wechat/manual-sync', { method: 'POST' });
+              const data = await res.json();
+              if (res.ok) {
+                setSyncResult({ added: data.added ?? 0, skipped: data.skipped ?? 0 });
+                loadChats();
+              } else {
+                alert(data.error || '同步失败');
+              }
+            } catch {
+              alert('同步请求失败，请检查网络');
+            } finally {
+              setSyncing(false);
+            }
+          }} disabled={syncing}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5"
+            style={{ background: syncing ? '#1a365d' : '#2563eb' }}>
+            {syncing ? (
+              <>
+                <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                同步中...
+              </>
+            ) : '🔄 手动同步微信'}
+          </button>
+          {syncResult && (
+            <span className="text-[11px] text-zinc-400">
+              同步完成：新增 {syncResult.added} 条，跳过 {syncResult.skipped} 条
+            </span>
           )}
           <button onClick={() => setShowBlocklist(true)}
             className="text-xs px-3 py-1.5 rounded-lg font-medium text-zinc-400 hover:text-white"
@@ -708,14 +502,6 @@ export default function WeChatDashboard() {
             );
           })}
         </div>
-      )}
-
-      {/* Pending modal */}
-      {showPending && (
-        <PendingContactsModal
-          onClose={() => setShowPending(false)}
-          onDone={() => { loadPendingCount(); loadChats(); }}
-        />
       )}
 
       {/* Blocklist modal */}
