@@ -43,7 +43,7 @@ export default async function ContactDetailPage({
   });
 
   // 按日期分组
-  const grouped = (chats as ChatRow[]).reduce<Record<string, ChatRow[]>>((acc, chat) => {
+  const grouped = (chats as unknown as ChatRow[]).reduce<Record<string, ChatRow[]>>((acc, chat) => {
     const date = chat.chat_date || chat.created_at.substring(0, 10);
     acc[date] = acc[date] || [];
     acc[date].push(chat);
