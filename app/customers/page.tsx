@@ -148,21 +148,24 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div className="flex-shrink-0 flex flex-col justify-center" style={{ width: '380px', minHeight: '48px' }}>
+                <div className="flex-shrink-0 flex flex-col justify-center" style={{ width: '440px', minHeight: '48px' }}>
+                  {/* 第一行：联系人标签 + 时间 */}
                   <div className="flex items-center gap-2 w-full">
+                    {(c as any).last_contact_name || (c as any).main_contact ? (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.2)' }}>
+                        {(c as any).last_contact_name || (c as any).main_contact}
+                      </span>
+                    ) : null}
                     {(c as any).last_chat_date ? (
-                      <span className="text-[11px] ml-0.5" style={{ color: '#60a5fa' }}>{(c as any).last_chat_date}</span>
+                      <span className="text-[11px]" style={{ color: '#60a5fa' }}>{(c as any).last_chat_date}</span>
                     ) : (
-                      <span className="text-[11px] text-zinc-600 ml-0.5">暂无聊天</span>
+                      <span className="text-[11px] text-zinc-600">暂无聊天</span>
                     )}
                   </div>
-                  {c.last_chat_summary ? (
-                    <p className="text-[11px] text-zinc-500 leading-relaxed mt-0.5 w-full" style={{ textAlign: 'left', whiteSpace: 'pre-wrap', maxHeight: '80px', overflow: 'hidden' }}>
-                      {c.last_chat_summary.trim().substring(0, 200)}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-zinc-600 mt-0.5 leading-relaxed w-full text-left">—</p>
-                  )}
+                  {/* 第二行：聊天摘要 */}
+                  <p className="text-[11px] text-zinc-500 leading-relaxed mt-1 w-full truncate" style={{ textAlign: 'left' }}>
+                    {c.last_chat_summary ? c.last_chat_summary.trim().substring(0, 80) : '—'}
+                  </p>
                 </div>
 
                 <svg className="w-4 h-4 text-zinc-600 flex-shrink-0 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">

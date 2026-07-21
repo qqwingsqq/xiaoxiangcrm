@@ -43,9 +43,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 批量获取每个客户的最近聊天内容
+    // 批量获取每个客户的最近聊天内容 + 联系人
     const { rows: lastChats } = await db.execute({
-      sql: `SELECT wc.customer_id, wc.raw_content, wc.summary FROM wechat_chats wc
+      sql: `SELECT wc.customer_id, wc.raw_content, wc.summary, wc.chat_date, wcc.name as contact_name
+            FROM wechat_chats wc
+            LEFT JOIN wechat_contacts wcc ON wcc.id = wc.wechat_contact_id
             INNER JOIN (
               SELECT customer_id, MAX(chat_date || '-' || created_at) as max_key
               FROM wechat_chats WHERE customer_id IN (${placeholders})
@@ -62,9 +64,31 @@ export async function GET(request: NextRequest) {
           r.last_chat_summary = chat.summary;
         } else if (chat.raw_content) {
           const lines = chat.raw_content.split('\n').filter((l: string) => l.trim());
-          r.last_chat_summary = lines.slice(-5).join('\n');
+          r.last_chat_summary = lines.slice(-3).join(' ');
         }
+        if (chat.chat_date) r.last_chat_date = chat.chat_date;
+        if (chat.contact_name) r.last_contact_name = chat.contact_name;
       }
+    }
+
+    // 批量获取每个客户的主要联系人（聊天记录最多的）
+    const { rows: contactStats } = await db.execute({
+      sql: `SELECT wcc.customer_id, wcc.name, COUNT(wc.id) as cnt
+            FROM wechat_contacts wcc
+            INNER JOIN wechat_chats wc ON wc.wechat_contact_id = wcc.id
+            WHERE wcc.customer_id IN (${placeholders})
+            GROUP BY wcc.id
+            ORDER BY cnt DESC`,
+      args: customerIds,
+    });
+    // 按 customer_id 取第一个（最多的）
+    const mainContactMap: Record<number, string> = {};
+    for (const row of contactStats as any[]) {
+      const cid = row.customer_id as number;
+      if (!mainContactMap[cid]) mainContactMap[cid] = row.name;
+    }
+    for (const r of enriched as any[]) {
+      r.main_contact = mainContactMap[r.id as number] || null;
     }
   }
 
