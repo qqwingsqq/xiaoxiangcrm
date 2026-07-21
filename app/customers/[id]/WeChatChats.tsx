@@ -374,6 +374,8 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
   const [newContactForm, setNewContactForm] = useState({ name: '', wxid: '', role: '' });
   const [saving, setSaving]       = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [linkingChat, setLinkingChat] = useState<number | null>(null);
   const latestCreatedAt           = useRef<string>('');
 
   const loadContacts = useCallback(async () => {
@@ -698,6 +700,7 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
               acc[name].push(chat);
               return acc;
             }, {})).map(([name, group]) => {
+              const isCollapsed = collapsedGroups.has(name);
               // 每个联系人内部按日期分组
               const byDate = group.reduce<Record<string, WeChatChat[]>>((acc, chat) => {
                 const date = chat.chat_date || chat.created_at.substring(0, 10);
@@ -706,29 +709,89 @@ export default function WeChatChats({ customerId, selectedContactId }: { custome
                 return acc;
               }, {});
               return (
-                <div key={name} className="space-y-2">
-                  {/* 联系人分隔 */}
-                  <div className="flex items-center gap-2 pt-2">
+                <div key={name} className="rounded-lg" style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+                  {/* 联系人标题 - 可点击折叠 */}
+                  <button
+                    onClick={() => {
+                      setCollapsedGroups(prev => {
+                        const next = new Set(prev);
+                        if (next.has(name)) next.delete(name);
+                        else next.add(name);
+                        return next;
+                      });
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 hover:opacity-80 transition-opacity text-left"
+                  >
+                    <span className={`text-xs transition-transform ${isCollapsed ? '' : 'rotate-90'}`}>▶</span>
                     <span className="text-xs font-medium text-green-400">{name}</span>
                     <span className="text-xs text-zinc-600">{group.length} 条</span>
                     <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
-                  </div>
+                  </button>
                   {/* 日期分组 */}
-                  {Object.entries(byDate).map(([date, dayChats]) => (
-                    <div key={date} className="space-y-2 pl-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-zinc-600 px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-input)' }}>{date}</span>
-                        <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
-                      </div>
-                      {dayChats.map(chat => (
-                        <ChatCard key={chat.id} chat={chat}
-                          isNew={newIds.has(chat.id)}
-                          onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
-                          onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
-                        />
+                  {!isCollapsed && (
+                    <div className="px-3 pb-3 space-y-2">
+                      {Object.entries(byDate).map(([date, dayChats]) => (
+                        <div key={date} className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-zinc-600 px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-input)' }}>{date}</span>
+                            <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
+                          </div>
+                          {dayChats.map(chat => (
+                            <div key={chat.id} className="relative">
+                              <ChatCard chat={chat}
+                                isNew={newIds.has(chat.id)}
+                                onDeleted={() => setChats(c => c.filter(x => x.id !== chat.id))}
+                                onAnalyzed={updated => setChats(c => c.map(x => x.id === updated.id ? updated : x))}
+                              />
+                              {/* 未关联联系人时显示关联按钮 */}
+                              {name === '未关联联系人' && contacts.length > 0 && (
+                                <div className="mt-1 flex items-center gap-2">
+                                  {linkingChat === chat.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <select
+                                        className="text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
+                                        onChange={async (e) => {
+                                          const contactId = e.target.value;
+                                          if (!contactId) return;
+                                          try {
+                                            const res = await fetch(`/api/customers/${customerId}/wechat-chats/${chat.id}`, {
+                                              method: 'PATCH',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ wechat_contact_id: contactId }),
+                                            });
+                                            if (res.ok) {
+                                              setChats(c => c.map(x => x.id === chat.id ? { ...x, contact_id: Number(contactId), contact_name: contacts.find(ct => ct.id === Number(contactId))?.name || null } : x));
+                                            }
+                                          } finally {
+                                            setLinkingChat(null);
+                                          }
+                                        }}
+                                        autoFocus
+                                      >
+                                        <option value="">选择联系人</option>
+                                        {contacts.map(c => (
+                                          <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                      </select>
+                                      <button onClick={() => setLinkingChat(null)} className="text-[11px] text-zinc-500">取消</button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setLinkingChat(chat.id)}
+                                      className="text-[11px] px-2 py-0.5 rounded text-blue-400 hover:text-blue-300 transition-colors"
+                                      style={{ background: 'rgba(59,130,246,0.1)' }}
+                                    >
+                                      关联到联系人
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               );
             })
