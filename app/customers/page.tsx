@@ -121,7 +121,7 @@ export default function CustomersPage() {
             return (
               <Link key={c.id} href={`/customers/${c.id}`}
                 className="flex items-center gap-4 rounded-xl px-4 py-3.5 transition-all group"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: '68px' }}
                 onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#3b82f6'; el.style.background = 'var(--bg-card-hover)'; }}
                 onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--border)'; el.style.background = 'var(--bg-card)'; }}
               >
