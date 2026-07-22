@@ -185,6 +185,7 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE users ADD COLUMN phone TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE users ADD COLUMN email TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN wechat_contact_id INTEGER'); } catch (_) {}
+    try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN user_id INTEGER'); } catch (_) {}
     // Seed default customer types if empty
     const { rows } = await db.execute('SELECT COUNT(*) as cnt FROM customer_types');
     if ((rows[0]?.cnt as number) === 0) {
