@@ -80,6 +80,7 @@ export default function WeChatDashboard() {
   const [showBlocklist, setShowBlocklist] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ added: number; skipped: number } | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
   const [blocklist, setBlocklist]   = useState<BlocklistItem[]>([]);
   const [blWxid, setBlWxid]         = useState('');
   const [blName, setBlName]         = useState('');
@@ -232,19 +233,35 @@ export default function WeChatDashboard() {
           <button onClick={async () => {
             setSyncing(true);
             setSyncResult(null);
+            setSyncProgress({ done: 0, total: 0 });
             try {
+              // 第一次调用获取总数
               const res = await fetch('/api/wechat/manual-sync', { method: 'POST' });
               const data = await res.json();
-              if (res.ok) {
-                setSyncResult({ added: data.added ?? 0, skipped: data.skipped ?? 0 });
-                loadChats();
-              } else {
-                alert(data.error || '同步失败');
+              if (!res.ok) { alert(data.error || '同步失败'); return; }
+              const total = (data.pending ?? 0) + (data.analyzed ?? 0);
+              let done = data.analyzed ?? 0;
+              setSyncProgress({ done, total });
+              // 循环处理剩余的 pending
+              let totalAdded = data.added ?? 0;
+              let totalSkipped = data.skipped ?? 0;
+              while ((data.pending ?? 0) > 0 && (data.analyzed ?? 0) > 0) {
+                const r = await fetch('/api/wechat/manual-sync', { method: 'POST' });
+                const d = await r.json();
+                if (!r.ok) break;
+                done += d.analyzed ?? 0;
+                totalAdded += d.added ?? 0;
+                totalSkipped += d.skipped ?? 0;
+                setSyncProgress({ done, total });
+                if ((d.analyzed ?? 0) === 0) break;
               }
+              setSyncResult({ added: totalAdded, skipped: totalSkipped });
+              loadChats();
             } catch {
               alert('同步请求失败，请检查网络');
             } finally {
               setSyncing(false);
+              setSyncProgress(null);
             }
           }} disabled={syncing}
             className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5"
@@ -252,7 +269,7 @@ export default function WeChatDashboard() {
             {syncing ? (
               <>
                 <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                同步中...
+                {syncProgress ? `进度 ${syncProgress.done}/${syncProgress.total}` : '同步中...'}
               </>
             ) : '🔄 手动同步微信'}
           </button>
