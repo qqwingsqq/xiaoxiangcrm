@@ -220,82 +220,88 @@ export default function WeChatDashboard() {
 
       {/* Header */}
       <div className="rounded-xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8.5 4a6.5 6.5 0 00-3.5 12.01V19l2.7-1.35A6.5 6.5 0 108.5 4zm8 3.5a5 5 0 100 10 5 5 0 000-10z" />
-            </svg>
-            <h1 className="text-lg font-semibold text-white">微信聊天跟进看板</h1>
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          {/* 左侧：标题 + 描述 + 操作按钮 */}
+          <div className="flex flex-col gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8.5 4a6.5 6.5 0 00-3.5 12.01V19l2.7-1.35A6.5 6.5 0 108.5 4zm8 3.5a5 5 0 100 10 5 5 0 000-10z" />
+              </svg>
+              <h1 className="text-lg font-semibold text-white">微信聊天跟进看板</h1>
+            </div>
+            <p className="text-xs text-zinc-500">汇总所有客户的微信沟通记录与AI提炼结果</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={async () => {
+                setSyncing(true);
+                setSyncResult(null);
+                setSyncProgress({ done: 0, total: 0 });
+                try {
+                  const res = await fetch('/api/wechat/manual-sync', { method: 'POST' });
+                  const data = await res.json();
+                  if (!res.ok) { alert(data.error || '同步失败'); return; }
+                  const total = (data.pending ?? 0) + (data.analyzed ?? 0);
+                  let done = data.analyzed ?? 0;
+                  setSyncProgress({ done, total });
+                  let totalAdded = data.added ?? 0;
+                  let totalSkipped = data.skipped ?? 0;
+                  while ((data.pending ?? 0) > 0 && (data.analyzed ?? 0) > 0) {
+                    const r = await fetch('/api/wechat/manual-sync', { method: 'POST' });
+                    const d = await r.json();
+                    if (!r.ok) break;
+                    done += d.analyzed ?? 0;
+                    totalAdded += d.added ?? 0;
+                    totalSkipped += d.skipped ?? 0;
+                    setSyncProgress({ done, total });
+                    if ((d.analyzed ?? 0) === 0) break;
+                  }
+                  setSyncResult({ added: totalAdded, skipped: totalSkipped });
+                  loadChats();
+                } catch {
+                  alert('同步请求失败，请检查网络');
+                } finally {
+                  setSyncing(false);
+                  setSyncProgress(null);
+                }
+              }} disabled={syncing}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5 transition-opacity"
+                style={{ background: syncing ? '#1a365d' : '#2563eb' }}>
+                {syncing ? (
+                  <>
+                    <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    {syncProgress ? `进度 ${syncProgress.done}/${syncProgress.total}` : '同步中...'}
+                  </>
+                ) : '🔄 手动同步微信'}
+              </button>
+              {syncResult && !syncing && (
+                <span className="text-[11px] text-green-400">
+                  ✓ 新增 {syncResult.added} 条
+                </span>
+              )}
+              <button onClick={organizeAll} disabled={organizing}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5 transition-opacity"
+                style={{ background: organizing ? '#1a3a1a' : '#16a34a' }}>
+                {organizing ? (
+                  <>
+                    <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    {orgProgress ? `整理中 ${orgProgress.done}/${orgProgress.done + orgProgress.remaining}` : '整理中...'}
+                  </>
+                ) : '✨ 一键整理'}
+              </button>
+            </div>
           </div>
-          <Link href="/customers"
-            className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-            ← 返回
-          </Link>
-        </div>
-        <p className="text-xs text-zinc-500 mb-3">汇总所有客户的微信沟通记录与AI提炼结果</p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={async () => {
-            setSyncing(true);
-            setSyncResult(null);
-            setSyncProgress({ done: 0, total: 0 });
-            try {
-              const res = await fetch('/api/wechat/manual-sync', { method: 'POST' });
-              const data = await res.json();
-              if (!res.ok) { alert(data.error || '同步失败'); return; }
-              const total = (data.pending ?? 0) + (data.analyzed ?? 0);
-              let done = data.analyzed ?? 0;
-              setSyncProgress({ done, total });
-              let totalAdded = data.added ?? 0;
-              let totalSkipped = data.skipped ?? 0;
-              while ((data.pending ?? 0) > 0 && (data.analyzed ?? 0) > 0) {
-                const r = await fetch('/api/wechat/manual-sync', { method: 'POST' });
-                const d = await r.json();
-                if (!r.ok) break;
-                done += d.analyzed ?? 0;
-                totalAdded += d.added ?? 0;
-                totalSkipped += d.skipped ?? 0;
-                setSyncProgress({ done, total });
-                if ((d.analyzed ?? 0) === 0) break;
-              }
-              setSyncResult({ added: totalAdded, skipped: totalSkipped });
-              loadChats();
-            } catch {
-              alert('同步请求失败，请检查网络');
-            } finally {
-              setSyncing(false);
-              setSyncProgress(null);
-            }
-          }} disabled={syncing}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5 transition-opacity"
-            style={{ background: syncing ? '#1a365d' : '#2563eb' }}>
-            {syncing ? (
-              <>
-                <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {syncProgress ? `进度 ${syncProgress.done}/${syncProgress.total}` : '同步中...'}
-              </>
-            ) : '🔄 手动同步微信'}
-          </button>
-          {syncResult && !syncing && (
-            <span className="text-[11px] text-green-400">
-              ✓ 新增 {syncResult.added} 条
-            </span>
-          )}
-          <button onClick={() => setShowBlocklist(true)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-zinc-400 hover:text-white transition-colors"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-            🚫 屏蔽名单
-          </button>
-          <button onClick={organizeAll} disabled={organizing}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5 transition-opacity"
-            style={{ background: organizing ? '#1a3a1a' : '#16a34a' }}>
-            {organizing ? (
-              <>
-                <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                {orgProgress ? `整理中 ${orgProgress.done}/${orgProgress.done + orgProgress.remaining}` : '整理中...'}
-              </>
-            ) : '✨ 一键整理'}
-          </button>
+          {/* 右侧：返回 + 屏蔽名单（右下角） */}
+          <div className="flex flex-col items-end gap-2">
+            <Link href="/customers"
+              className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+              ← 返回
+            </Link>
+            <button onClick={() => setShowBlocklist(true)}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium text-zinc-400 hover:text-white transition-colors"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+              🚫 屏蔽名单
+            </button>
+          </div>
         </div>
       </div>
 
