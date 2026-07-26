@@ -219,30 +219,33 @@ export default function WeChatDashboard() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+      <div className="rounded-xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <div className="flex items-center gap-2">
             <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8.5 4a6.5 6.5 0 00-3.5 12.01V19l2.7-1.35A6.5 6.5 0 108.5 4zm8 3.5a5 5 0 100 10 5 5 0 000-10z" />
             </svg>
-            微信聊天跟进看板
-          </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">汇总所有客户的微信沟通记录与AI提炼结果</p>
+            <h1 className="text-lg font-semibold text-white">微信聊天跟进看板</h1>
+          </div>
+          <Link href="/customers"
+            className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+            ← 返回
+          </Link>
         </div>
+        <p className="text-xs text-zinc-500 mb-3">汇总所有客户的微信沟通记录与AI提炼结果</p>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={async () => {
             setSyncing(true);
             setSyncResult(null);
             setSyncProgress({ done: 0, total: 0 });
             try {
-              // 第一次调用获取总数
               const res = await fetch('/api/wechat/manual-sync', { method: 'POST' });
               const data = await res.json();
               if (!res.ok) { alert(data.error || '同步失败'); return; }
               const total = (data.pending ?? 0) + (data.analyzed ?? 0);
               let done = data.analyzed ?? 0;
               setSyncProgress({ done, total });
-              // 循环处理剩余的 pending
               let totalAdded = data.added ?? 0;
               let totalSkipped = data.skipped ?? 0;
               while ((data.pending ?? 0) > 0 && (data.analyzed ?? 0) > 0) {
@@ -264,7 +267,7 @@ export default function WeChatDashboard() {
               setSyncProgress(null);
             }
           }} disabled={syncing}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5"
+            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5 transition-opacity"
             style={{ background: syncing ? '#1a365d' : '#2563eb' }}>
             {syncing ? (
               <>
@@ -273,31 +276,26 @@ export default function WeChatDashboard() {
               </>
             ) : '🔄 手动同步微信'}
           </button>
-          {syncResult && (
-            <span className="text-[11px] text-zinc-400">
-              同步完成：新增 {syncResult.added} 条，跳过 {syncResult.skipped} 条
+          {syncResult && !syncing && (
+            <span className="text-[11px] text-green-400">
+              ✓ 新增 {syncResult.added} 条
             </span>
           )}
           <button onClick={() => setShowBlocklist(true)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-zinc-400 hover:text-white"
+            className="text-xs px-3 py-1.5 rounded-lg font-medium text-zinc-400 hover:text-white transition-colors"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
             🚫 屏蔽名单
           </button>
           <button onClick={organizeAll} disabled={organizing}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5"
-            style={{ background: organizing ? '#1a3a1a' : '#16a34a', border: organizing ? '1px solid #16a34a' : 'none' }}>
+            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5 transition-opacity"
+            style={{ background: organizing ? '#1a3a1a' : '#16a34a' }}>
             {organizing ? (
               <>
                 <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                整理中 {orgProgress ? `${orgProgress.done}条 剩余${orgProgress.remaining}` : ''}
+                {orgProgress ? `整理中 ${orgProgress.done}/${orgProgress.done + orgProgress.remaining}` : '整理中...'}
               </>
-            ) : '✨ 一键整理聊天记录'}
+            ) : '✨ 一键整理'}
           </button>
-          <Link href="/customers"
-            className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-            ← 返回
-          </Link>
         </div>
       </div>
 
