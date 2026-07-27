@@ -160,7 +160,7 @@ export default function CustomersPage() {
                   {/* 聊天摘要 / 提醒 */}
                   {c.last_chat_summary && (
                     <p className="text-[11px] text-zinc-500 leading-relaxed mt-1 w-full truncate" style={{ textAlign: 'left' }}>
-                      {c.last_chat_summary.trim().substring(0, 80)}
+                      {c.last_chat_summary.trim().substring(0, 200)}
                     </p>
                   )}
                 </div>
