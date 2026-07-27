@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
-import { requireSession } from '@/lib/auth';
+import { requireSession, getMonitorUserId } from '@/lib/auth';
 import Anthropic from '@anthropic-ai/sdk';
 
 async function analyzeChat(content: string, apiKey: string) {
@@ -19,6 +19,7 @@ ${content.substring(0, 4000)}
 {
   "summary": "摘要必须包含两部分：①我方提供的信息/内容（我方说了什么、发送了什么资料）；②对方表达的态度或回应（如对方全程未回复则写"对方未回复"）。100字以内。",
   "next_meeting": "下次见面/沟通计划（如：后天上午10点线下碰面，或null）",
+  "next_action": "需要提醒的重点事项（如发货日期、会议时间等，无则null）",
   "discussed_features": ["功能需求1"],
   "next_steps": ["下一步行动1"],
   "intent_level": "hot/warm/cold",
@@ -31,23 +32,25 @@ ${content.substring(0, 4000)}
   return JSON.parse(raw.text.replace(/```json\n?|\n?```/g, '').trim());
 }
 
+function getUserId(req: NextRequest): number | null {
+  return getMonitorUserId(req) ?? (() => { try { return requireSession(req).id; } catch { return null; } })();
+}
+
 export async function GET(req: NextRequest) {
-  let session;
-  try { session = requireSession(req); } catch {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const userId = getMonitorUserId(req) ?? (() => { try { return requireSession(req).id; } catch { return null; } })();
+  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const db = await ensureDb();
   const { rows } = await db.execute({
     sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
           JOIN customers c ON c.id = wc.customer_id
           WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)`,
-    args: [session.id],
+    args: [userId],
   });
   const total = await db.execute({
     sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
           JOIN customers c ON c.id = wc.customer_id
           WHERE (c.user_id = ? OR c.user_id IS NULL)`,
-    args: [session.id],
+    args: [userId],
   });
   return NextResponse.json({
     pending: rows[0].cnt,
@@ -56,10 +59,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let session;
-  try { session = requireSession(req); } catch {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
+  const userId = getMonitorUserId(req) ?? (() => { try { return requireSession(req).id; } catch { return null; } })();
+  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const { batch_size = 10 } = await req.json().catch(() => ({}));
 
   const db = await ensureDb();
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
           JOIN customers c ON c.id = wc.customer_id
           WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)
           LIMIT ?`,
-    args: [session.id, batch_size],
+    args: [userId, batch_size],
   });
 
   if (pending.length === 0) {
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
       const result = await analyzeChat(row.raw_content as string, apiKey);
       await db.execute({
         sql: `UPDATE wechat_chats SET
-          summary = ?, next_meeting = ?,
+          summary = ?, next_meeting = ?, next_action = ?,
           discussed_features = ?, next_steps = ?,
           intent_level = ?, key_points = ?,
           analysis_status = 'done'
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
         args: [
           result.summary || '',
           result.next_meeting || null,
+          result.next_action || null,
           JSON.stringify(result.discussed_features || []),
           JSON.stringify(result.next_steps || []),
           result.intent_level || 'unknown',
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
     sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
           JOIN customers c ON c.id = wc.customer_id
           WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)`,
-    args: [session.id],
+    args: [userId],
   });
 
   return NextResponse.json({
