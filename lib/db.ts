@@ -99,6 +99,7 @@ export async function ensureDb(): Promise<Client> {
         raw_content TEXT NOT NULL,
         summary TEXT,
         next_meeting TEXT,
+        next_action TEXT,
         discussed_features TEXT DEFAULT '[]',
         next_steps TEXT DEFAULT '[]',
         intent_level TEXT DEFAULT 'unknown',
@@ -186,6 +187,7 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE users ADD COLUMN email TEXT'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN wechat_contact_id INTEGER'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN user_id INTEGER'); } catch (_) {}
+    try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN next_action TEXT'); } catch (_) {}
     // Seed default customer types if empty
     const { rows } = await db.execute('SELECT COUNT(*) as cnt FROM customer_types');
     if ((rows[0]?.cnt as number) === 0) {
