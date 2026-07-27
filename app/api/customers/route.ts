@@ -43,21 +43,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 批量获取每个客户的最近10条聊天记录（含总结和提醒）
-    const { rows: lastChats } = await db.execute({
-      sql: `SELECT wc.customer_id, wc.raw_content, wc.summary, wc.next_action, wc.chat_date, wc.created_at
-            FROM wechat_chats wc
-            INNER JOIN (
-              SELECT customer_id, MAX(chat_date || '-' || created_at) as max_key
-              FROM wechat_chats WHERE customer_id IN (${placeholders})
-              GROUP BY customer_id
-            ) latest ON wc.customer_id = latest.customer_id
-              AND (wc.chat_date || '-' || wc.created_at) = latest.max_key`,
-      args: customerIds,
-    });
-    const latestChatMap = Object.fromEntries((lastChats as any[]).map(c => [c.customer_id, c]));
-
-    // 批量获取每个客户最近10条聊天记录用于总结
+    // 批量获取每个客户最近10条聊天记录（含总结和提醒）
     const { rows: recentChats } = await db.execute({
       sql: `SELECT wc.customer_id, wc.summary, wc.next_action, wc.chat_date, wc.created_at
             FROM wechat_chats wc
@@ -74,23 +60,22 @@ export async function GET(request: NextRequest) {
     }
 
     for (const r of enriched as any[]) {
-      const latest = latestChatMap[r.id as number];
       const recents = recentMap[r.id as number] || [];
 
       // 优先查找最近10条中是否有提醒（next_action）
       const reminder = recents.find(c => c.next_action && c.next_action.trim());
       if (reminder) {
         r.last_chat_summary = `📋 ${reminder.next_action.trim()}`;
-      } else if (latest) {
-        // 无提醒则显示最新一条的总结
-        if (latest.summary) {
-          r.last_chat_summary = latest.summary;
-        } else if (latest.raw_content) {
-          const lines = latest.raw_content.split('\n').filter((l: string) => l.trim());
-          r.last_chat_summary = lines.slice(-3).join(' ');
+      } else {
+        // 无提醒则显示最近一条有总结的
+        const withSummary = recents.find(c => c.summary && c.summary.trim());
+        if (withSummary) {
+          r.last_chat_summary = withSummary.summary;
         }
       }
 
+      // 取最新一条的日期
+      const latest = recents[0];
       if (latest?.chat_date) r.last_chat_date = latest.chat_date;
     }
   }
