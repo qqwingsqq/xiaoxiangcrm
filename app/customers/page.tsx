@@ -158,9 +158,11 @@ export default function CustomersPage() {
                     )}
                   </div>
                   {/* 聊天摘要 / 提醒 */}
-                  <p className="text-[11px] text-zinc-500 leading-relaxed mt-1 w-full truncate" style={{ textAlign: 'left' }}>
-                    {c.last_chat_summary ? c.last_chat_summary.trim().substring(0, 80) : '—'}
-                  </p>
+                  {c.last_chat_summary && (
+                    <p className="text-[11px] text-zinc-500 leading-relaxed mt-1 w-full truncate" style={{ textAlign: 'left' }}>
+                      {c.last_chat_summary.trim().substring(0, 80)}
+                    </p>
+                  )}
                 </div>
 
                 <svg className="w-4 h-4 text-zinc-600 flex-shrink-0 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
