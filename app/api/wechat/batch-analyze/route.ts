@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
-import { requireSession, getMonitorUserId } from '@/lib/auth';
+import { getMonitorUserId, getSessionUser } from '@/lib/auth';
 import Anthropic from '@anthropic-ai/sdk';
 
 async function analyzeChat(content: string, apiKey: string) {
@@ -32,12 +32,8 @@ ${content.substring(0, 4000)}
   return JSON.parse(raw.text.replace(/```json\n?|\n?```/g, '').trim());
 }
 
-function getUserId(req: NextRequest): number | null {
-  return getMonitorUserId(req) ?? (() => { try { return requireSession(req).id; } catch { return null; } })();
-}
-
 export async function GET(req: NextRequest) {
-  const userId = getMonitorUserId(req) ?? (() => { try { return requireSession(req).id; } catch { return null; } })();
+  const userId = getMonitorUserId(req) ?? getSessionUser(req)?.id;
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const db = await ensureDb();
   const { rows } = await db.execute({
@@ -59,7 +55,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = getMonitorUserId(req) ?? (() => { try { return requireSession(req).id; } catch { return null; } })();
+  const userId = getMonitorUserId(req) ?? getSessionUser(req)?.id;
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const { batch_size = 10 } = await req.json().catch(() => ({}));
 
