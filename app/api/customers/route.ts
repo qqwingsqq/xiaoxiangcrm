@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     // 批量获取每个客户最近10条聊天记录（含总结和提醒）
     const { rows: recentChats } = await db.execute({
-      sql: `SELECT wc.customer_id, wc.raw_content, wc.summary, wc.next_action, wc.chat_date, wc.created_at
+      sql: `SELECT wc.customer_id, wc.summary, wc.next_action, wc.chat_date, wc.created_at
             FROM wechat_chats wc
             WHERE wc.customer_id IN (${placeholders})
             ORDER BY wc.customer_id, wc.chat_date DESC, wc.created_at DESC`,
@@ -57,20 +57,6 @@ export async function GET(request: NextRequest) {
       const cid = row.customer_id as number;
       if (!recentMap[cid]) recentMap[cid] = [];
       if (recentMap[cid].length < 10) recentMap[cid].push(row);
-    }
-
-    // 从 raw_content 提取最后一条消息的简洁内容
-    function extractBrief(raw: string): string {
-      const lines = raw.split('\n').filter(l => l.trim());
-      const last = lines[lines.length - 1];
-      if (!last) return '';
-      const m = last.match(/^\[[\d:]+\]\s*(?:我|对方|[^:]+)[:：]\s*(.+)$/);
-      if (m) {
-        const content = m[1].trim();
-        if (content.startsWith('[')) return content;
-        return content.substring(0, 60);
-      }
-      return last.trim().substring(0, 60);
     }
 
     for (const r of enriched as any[]) {
@@ -88,13 +74,6 @@ export async function GET(request: NextRequest) {
         const unique = [...new Set(summaries)] as string[];
         if (unique.length > 0) {
           r.last_chat_summary = unique.join(' | ');
-        } else {
-          // 总结为空则提取最近一条聊天内容
-          const withRaw = recents.find(c => c.raw_content?.trim());
-          if (withRaw) {
-            const brief = extractBrief(withRaw.raw_content);
-            if (brief) r.last_chat_summary = brief;
-          }
         }
       }
 
