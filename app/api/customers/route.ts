@@ -43,11 +43,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 批量获取每个客户的最近聊天内容 + 联系人
+    // 批量获取每个客户的最近10条聊天记录（含总结和提醒）
     const { rows: lastChats } = await db.execute({
-      sql: `SELECT wc.customer_id, wc.raw_content, wc.summary, wc.chat_date, wcc.name as contact_name
+      sql: `SELECT wc.customer_id, wc.raw_content, wc.summary, wc.next_action, wc.chat_date, wc.created_at
             FROM wechat_chats wc
-            LEFT JOIN wechat_contacts wcc ON wcc.id = wc.wechat_contact_id
             INNER JOIN (
               SELECT customer_id, MAX(chat_date || '-' || created_at) as max_key
               FROM wechat_chats WHERE customer_id IN (${placeholders})
@@ -56,39 +55,43 @@ export async function GET(request: NextRequest) {
               AND (wc.chat_date || '-' || wc.created_at) = latest.max_key`,
       args: customerIds,
     });
-    const chatMap = Object.fromEntries((lastChats as any[]).map(c => [c.customer_id, c]));
-    for (const r of enriched as any[]) {
-      const chat = chatMap[r.id as number];
-      if (chat) {
-        if (chat.summary) {
-          r.last_chat_summary = chat.summary;
-        } else if (chat.raw_content) {
-          const lines = chat.raw_content.split('\n').filter((l: string) => l.trim());
-          r.last_chat_summary = lines.slice(-3).join(' ');
-        }
-        if (chat.chat_date) r.last_chat_date = chat.chat_date;
-        if (chat.contact_name) r.last_contact_name = chat.contact_name;
-      }
-    }
+    const latestChatMap = Object.fromEntries((lastChats as any[]).map(c => [c.customer_id, c]));
 
-    // 批量获取每个客户的主要联系人（聊天记录最多的）
-    const { rows: contactStats } = await db.execute({
-      sql: `SELECT wcc.customer_id, wcc.name, COUNT(wc.id) as cnt
-            FROM wechat_contacts wcc
-            INNER JOIN wechat_chats wc ON wc.wechat_contact_id = wcc.id
-            WHERE wcc.customer_id IN (${placeholders})
-            GROUP BY wcc.id
-            ORDER BY cnt DESC`,
+    // 批量获取每个客户最近10条聊天记录用于总结
+    const { rows: recentChats } = await db.execute({
+      sql: `SELECT wc.customer_id, wc.summary, wc.next_action, wc.chat_date, wc.created_at
+            FROM wechat_chats wc
+            WHERE wc.customer_id IN (${placeholders})
+            ORDER BY wc.customer_id, wc.chat_date DESC, wc.created_at DESC`,
       args: customerIds,
     });
-    // 按 customer_id 取第一个（最多的）
-    const mainContactMap: Record<number, string> = {};
-    for (const row of contactStats as any[]) {
+    // 按 customer_id 分组，每组取最近10条
+    const recentMap: Record<number, any[]> = {};
+    for (const row of recentChats as any[]) {
       const cid = row.customer_id as number;
-      if (!mainContactMap[cid]) mainContactMap[cid] = row.name;
+      if (!recentMap[cid]) recentMap[cid] = [];
+      if (recentMap[cid].length < 10) recentMap[cid].push(row);
     }
+
     for (const r of enriched as any[]) {
-      r.main_contact = mainContactMap[r.id as number] || null;
+      const latest = latestChatMap[r.id as number];
+      const recents = recentMap[r.id as number] || [];
+
+      // 优先查找最近10条中是否有提醒（next_action）
+      const reminder = recents.find(c => c.next_action && c.next_action.trim());
+      if (reminder) {
+        r.last_chat_summary = `📋 ${reminder.next_action.trim()}`;
+      } else if (latest) {
+        // 无提醒则显示最新一条的总结
+        if (latest.summary) {
+          r.last_chat_summary = latest.summary;
+        } else if (latest.raw_content) {
+          const lines = latest.raw_content.split('\n').filter((l: string) => l.trim());
+          r.last_chat_summary = lines.slice(-3).join(' ');
+        }
+      }
+
+      if (latest?.chat_date) r.last_chat_date = latest.chat_date;
     }
   }
 
