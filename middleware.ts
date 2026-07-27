@@ -6,6 +6,10 @@ const MONITOR_PATHS = new Set([
   '/api/wechat/realtime-append',
   '/api/wechat/bulk-import',
   '/api/wechat/refresh-names',
+  '/api/wechat/batch-analyze',
+  '/api/wechat/auto-organize',
+  '/api/wechat/manual-sync',
+  '/api/wechat/blocklist',
 ]);
 
 export function middleware(request: NextRequest) {
