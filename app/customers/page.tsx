@@ -121,7 +121,7 @@ export default function CustomersPage() {
             return (
               <Link key={c.id} href={`/customers/${c.id}`}
                 className="flex items-center gap-4 rounded-xl px-4 py-3.5 transition-all group"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: '68px' }}
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', minHeight: '68px' }}
                 onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#3b82f6'; el.style.background = 'var(--bg-card-hover)'; }}
                 onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--border)'; el.style.background = 'var(--bg-card)'; }}
               >
@@ -148,7 +148,7 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div className="flex-shrink-0 flex flex-col justify-center" style={{ width: '440px', minHeight: '48px' }}>
+                <div className="flex-shrink-0 flex flex-col justify-center" style={{ width: '560px', minHeight: '48px' }}>
                   {/* 聊天日期 / 摘要 */}
                   <div className="flex items-center gap-2 w-full">
                     {(c as any).last_chat_date ? (
@@ -159,8 +159,8 @@ export default function CustomersPage() {
                   </div>
                   {/* 聊天摘要 / 提醒 */}
                   {c.last_chat_summary && (
-                    <p className="text-[11px] text-zinc-500 leading-relaxed mt-1 w-full truncate" style={{ textAlign: 'left' }}>
-                      {c.last_chat_summary.trim().substring(0, 200)}
+                    <p className="text-[12px] text-amber-400 leading-snug mt-1 w-full line-clamp-2" style={{ textAlign: 'left' }}>
+                      {c.last_chat_summary.trim().substring(0, 280)}
                     </p>
                   )}
                 </div>
