@@ -311,8 +311,8 @@ export default function DashboardPage() {
   const stats = [
     { label: '客户总数', value: data?.totalCustomers ?? 0, color: '#3b82f6', href: '/customers', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
     { label: '待办提醒', value: reminders.length, color: '#f59e0b', href: '#', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
-    { label: '近期跟进', value: data?.recentFollowUps.length ?? 0, color: '#10b981', href: '/customers', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-    { label: '地址覆盖', value: data?.customerLocations.length ?? 0, color: '#a855f7', href: '/customers', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' },
+    { label: '近期跟进', value: data?.recentFollowUps.length ?? 0, color: '#10b981', href: '#follow-ups', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+    { label: '地址覆盖', value: data?.customerLocations.length ?? 0, color: '#a855f7', href: '/map', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' },
   ];
 
   // ── 手机布局 (390px, 6.8英寸) ──────────────────────
@@ -409,7 +409,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 近期跟进 */}
-        <div className="rounded-2xl p-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <div id="follow-ups" className="rounded-2xl p-4 scroll-mt-20" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <FollowUpHeader />
           <div className="space-y-2">
             {(data?.recentFollowUps || []).slice(0, 4).map(f => (
@@ -529,7 +529,7 @@ export default function DashboardPage() {
             <CardHeader title="客户地址分布" action={<span className="text-xs text-zinc-500">{data?.customerLocations.length || 0} 家</span>} />
             <LocationContent locations={data?.customerLocations || []} colorMap={typeColorMap} />
           </div>
-          <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 220 }}>
+          <div id="follow-ups" className="rounded-2xl p-4 flex flex-col scroll-mt-20" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 220 }}>
             <FollowUpHeader />
             <div className="flex-1 overflow-y-auto space-y-2">
               {(data?.recentFollowUps || []).slice(0, 4).map(f => (
@@ -650,7 +650,7 @@ export default function DashboardPage() {
           <CardHeader title="客户地址分布" action={<span className="text-xs text-zinc-500">{data?.customerLocations.length || 0} 家有地址记录</span>} />
           <LocationContent locations={data?.customerLocations || []} colorMap={typeColorMap} />
         </div>
-        <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 240 }}>
+        <div id="follow-ups" className="rounded-2xl p-5 flex flex-col scroll-mt-20" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 240 }}>
           <FollowUpHeader />
           <div className="flex-1 overflow-y-auto space-y-2">
             {(data?.recentFollowUps || []).map(f => (

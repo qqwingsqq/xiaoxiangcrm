@@ -10,6 +10,7 @@ const MONITOR_PATHS = new Set([
   '/api/wechat/auto-organize',
   '/api/wechat/manual-sync',
   '/api/wechat/blocklist',
+  '/api/wechat/cleanup-test',
 ]);
 
 export function middleware(request: NextRequest) {
