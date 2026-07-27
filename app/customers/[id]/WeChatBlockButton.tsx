@@ -18,8 +18,8 @@ export default function WeChatBlockButton({ wxid, customerName }: { wxid: string
     });
     setBlocked(true);
     setLoading(false);
-    // 屏蔽后跳转回微信看板
-    setTimeout(() => router.push('/wechat'), 800);
+    // 屏蔽后跳转回客户列表
+    setTimeout(() => router.push('/customers'), 800);
   };
 
   if (blocked) {
