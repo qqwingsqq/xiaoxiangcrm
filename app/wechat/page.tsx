@@ -290,7 +290,7 @@ export default function WeChatDashboard() {
             </div>
           </div>
           {/* 右侧：返回 + 屏蔽名单（右下角） */}
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-2 self-end">
             <Link href="/customers"
               className="text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white transition-colors"
               style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
@@ -345,24 +345,13 @@ export default function WeChatDashboard() {
         ))}
       </div>
 
-      {/* Filter & search */}
-      <div className="flex flex-wrap gap-2 items-center">
+      {/* Search */}
+      <div className="flex gap-2 items-center">
         <input type="text" placeholder="搜索客户名、摘要..."
           value={search} onChange={e => setSearch(e.target.value)}
           className="px-3 py-1.5 rounded-lg text-sm flex-1 min-w-40 focus:outline-none focus:ring-2 focus:ring-green-500"
           style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
         />
-        {(['all', 'hot', 'warm', 'cold'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium"
-            style={{
-              background: filter === f ? (f === 'all' ? '#1d4ed8' : INTENT[f]?.bg) : 'var(--bg-input)',
-              color: filter === f ? (f === 'all' ? 'white' : INTENT[f]?.color) : 'var(--text-muted)',
-              border: `1px solid ${filter === f ? (f === 'all' ? '#1d4ed8' : INTENT[f]?.dot) : 'var(--border)'}`,
-            }}>
-            {f === 'all' ? '全部' : INTENT[f]?.label}
-          </button>
-        ))}
       </div>
 
       {/* Chat list */}
