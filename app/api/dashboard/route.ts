@@ -37,8 +37,8 @@ export async function GET(req: NextRequest) {
     }),
     db.execute({
       sql: `SELECT r.*, c.name as customer_name
-            FROM reminders r JOIN customers c ON r.customer_id = c.id
-            WHERE r.is_done = 0 AND (c.user_id = ? OR c.user_id IS NULL)
+            FROM reminders r LEFT JOIN customers c ON r.customer_id = c.id
+            WHERE r.is_done = 0 AND (c.user_id = ? OR c.user_id IS NULL OR r.customer_id IS NULL)
             ORDER BY CASE WHEN r.remind_date IS NULL THEN 1 ELSE 0 END, r.remind_date ASC
             LIMIT 10`,
       args: [uid],

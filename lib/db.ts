@@ -188,6 +188,26 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN wechat_contact_id INTEGER'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN user_id INTEGER'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN next_action TEXT'); } catch (_) {}
+    // Migrate reminders: add location, make customer_id nullable
+    try { await db.execute('ALTER TABLE reminders ADD COLUMN location TEXT'); } catch (_) {}
+    try {
+      // Rebuild reminders table to make customer_id nullable (SQLite doesn't support ALTER COLUMN)
+      await db.execute(`CREATE TABLE IF NOT EXISTS reminders_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER,
+        document_id INTEGER,
+        follow_up_id INTEGER,
+        content TEXT NOT NULL,
+        location TEXT,
+        remind_date TEXT,
+        is_done INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+      )`);
+      await db.execute(`INSERT INTO reminders_new (id, customer_id, document_id, follow_up_id, content, location, remind_date, is_done, created_at)
+        SELECT id, customer_id, document_id, follow_up_id, content, NULL, remind_date, is_done, created_at FROM reminders`);
+      await db.execute(`DROP TABLE reminders`);
+      await db.execute(`ALTER TABLE reminders_new RENAME TO reminders`);
+    } catch (_) {}
     // Seed default customer types if empty
     const { rows } = await db.execute('SELECT COUNT(*) as cnt FROM customer_types');
     if ((rows[0]?.cnt as number) === 0) {
@@ -281,10 +301,11 @@ export interface Document {
 
 export interface Reminder {
   id: number;
-  customer_id: number;
+  customer_id: number | null;
   document_id: number | null;
   follow_up_id: number | null;
   content: string;
+  location: string | null;
   remind_date: string | null;
   is_done: number;
   created_at: string;

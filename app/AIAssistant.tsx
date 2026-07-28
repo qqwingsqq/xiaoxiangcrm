@@ -17,6 +17,7 @@ interface ActionData {
   content?: string;
   date?: string | null;
   time?: string | null;
+  location?: string | null;
   description?: string;
 }
 
@@ -70,12 +71,13 @@ function ActionSuggestionCard({ action, customers, onSave, onSkip }: {
         {action.title && <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{action.title}</div>}
         {(action.content || action.description) && <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{action.content || action.description}</div>}
         {action.date && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>🕐 {action.date}{action.time ? ` ${action.time}` : ''}</div>}
+        {action.location && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>📍 {action.location}</div>}
         {action.customer_name && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>👤 {action.customer_name}</div>}
       </div>
-      {(needsCustomer || action.type === 'reminder') && customers.length > 0 && (
+      {needsCustomer && customers.length > 0 && (
         <select value={customerId} onChange={e => setCustomerId(Number(e.target.value) || '')}
           style={{ width: '100%', marginBottom: 8, padding: '5px 8px', borderRadius: 7, fontSize: 12, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-          <option value="">{action.type === 'reminder' ? '— 可选：关联客户 —' : '— 选择关联客户 —'}</option>
+          <option value="">— 选择关联客户 —</option>
           {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       )}
@@ -222,7 +224,7 @@ export default function AIAssistant() {
       const action = (data.action?.type && data.action.type !== 'none') ? data.action as ActionData : null;
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: res.ok ? data.reply : (data.error || '请求失败，请重试'),
+        content: res.ok ? cleanReply(data.reply) : (data.error || '请求失败，请重试'),
         action: res.ok ? action : null,
         actionState: null,
       }]);
@@ -245,20 +247,27 @@ export default function AIAssistant() {
         body: JSON.stringify({ title: action.title || '日程', event_date: action.date, event_time: action.time || null, description: action.description || '' }),
       });
     } else if (action.type === 'reminder') {
-      if (customerId) {
-        await fetch('/api/reminders', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customer_id: customerId, content: action.content || action.title || '提醒', remind_date: action.date || null }),
-        });
-      } else {
-        // 没有关联客户时，保存为日程
-        await fetch('/api/calendar-events', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: action.content || action.title || '提醒', event_date: action.date || new Date().toISOString().substring(0, 10), event_time: null, description: '' }),
-        });
-      }
+      await fetch('/api/reminders', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customerId || null,
+          content: action.content || action.title || '提醒',
+          location: action.location || null,
+          remind_date: action.date || null,
+        }),
+      });
     }
     setMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, actionState: 'saved' } : m));
+  };
+
+  // Clean AI reply: remove code blocks and any residual JSON/actions
+  const cleanReply = (text: string): string => {
+    return text
+      .replace(/\[ACTION\][\s\S]*?\[\/ACTION\]/g, '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`[^`]+`/g, '')
+      .replace(/\{\s*"type"\s*:[\s\S]*?\}/g, '')
+      .trim();
   };
 
   // ── effects ──────────────────────────────────────────────────────────────────

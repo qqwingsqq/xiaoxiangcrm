@@ -16,7 +16,7 @@ interface DashData {
     created_at: string; content: string | null; customer_id?: number;
   }[];
   pendingReminders: {
-    id: number; content: string; customer_name: string; remind_date: string | null;
+    id: number; content: string; customer_name: string | null; location: string | null; remind_date: string | null;
   }[];
   customerLocations: { id: number; name: string; type: string; address: string }[];
   customersByType: { type: string; count: number }[];
@@ -378,9 +378,10 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-zinc-300 leading-relaxed">{r.content}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs text-blue-400">{r.customer_name}</span>
+                      {r.customer_name && <span className="text-xs text-blue-400">{r.customer_name}</span>}
+                      {r.location && <span className="text-xs text-purple-400">📍 {r.location}</span>}
                       {r.remind_date && <span className="text-xs text-amber-400">{r.remind_date}</span>}
-                      <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name)}
+                      <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name || '')}
                         className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
                         style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', cursor: 'pointer' }}>
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -498,9 +499,10 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-zinc-300 leading-relaxed">{r.content}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs text-blue-400">{r.customer_name}</span>
+                      {r.customer_name && <span className="text-xs text-blue-400">{r.customer_name}</span>}
+                      {r.location && <span className="text-xs text-purple-400">📍 {r.location}</span>}
                       {r.remind_date && <span className="text-xs text-amber-400">{r.remind_date}</span>}
-                      <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name)}
+                      <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name || '')}
                         className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
                         style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', cursor: 'pointer' }}>
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -619,9 +621,10 @@ export default function DashboardPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-zinc-300 leading-relaxed">{r.content}</p>
                   <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                    <Link href="#" className="text-xs text-blue-400 hover:underline">{r.customer_name}</Link>
+                    {r.customer_name && <Link href="#" className="text-xs text-blue-400 hover:underline">{r.customer_name}</Link>}
+                    {r.location && <span className="text-xs text-purple-400">📍 {r.location}</span>}
                     {r.remind_date && <span className="text-xs text-amber-400">{r.remind_date}</span>}
-                    <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name)}
+                    <button onClick={() => downloadICS(r.content, r.remind_date, r.customer_name || '')}
                       className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
                       style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399', cursor: 'pointer' }}>
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
