@@ -188,25 +188,25 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN wechat_contact_id INTEGER'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN user_id INTEGER'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN next_action TEXT'); } catch (_) {}
-    // Migrate reminders: add location, make customer_id nullable
-    try { await db.execute('ALTER TABLE reminders ADD COLUMN location TEXT'); } catch (_) {}
+    // Migrate reminders: add location column (idempotent, safe)
     try {
-      // Rebuild reminders table to make customer_id nullable (SQLite doesn't support ALTER COLUMN)
-      await db.execute(`CREATE TABLE IF NOT EXISTS reminders_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer_id INTEGER,
-        document_id INTEGER,
-        follow_up_id INTEGER,
-        content TEXT NOT NULL,
-        location TEXT,
-        remind_date TEXT,
-        is_done INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT (datetime('now', 'localtime'))
-      )`);
-      await db.execute(`INSERT INTO reminders_new (id, customer_id, document_id, follow_up_id, content, location, remind_date, is_done, created_at)
-        SELECT id, customer_id, document_id, follow_up_id, content, NULL, remind_date, is_done, created_at FROM reminders`);
-      await db.execute(`DROP TABLE reminders`);
-      await db.execute(`ALTER TABLE reminders_new RENAME TO reminders`);
+      const { rows: reminderCols } = await db.execute("PRAGMA table_info(reminders)");
+      const hasLocation = (reminderCols as unknown as { name: string }[]).some(c => c.name === 'location');
+      if (!hasLocation) {
+        await db.execute('ALTER TABLE reminders ADD COLUMN location TEXT');
+      }
+    } catch (_) {}
+    // Recovery: if previous migration left reminders_new without renaming
+    try {
+      const { rows: newCheck } = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reminders_new'");
+      if (newCheck.length > 0) {
+        const { rows: oldCheck } = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reminders'");
+        if (oldCheck.length === 0) {
+          await db.execute('ALTER TABLE reminders_new RENAME TO reminders');
+        } else {
+          await db.execute('DROP TABLE reminders_new');
+        }
+      }
     } catch (_) {}
     // Seed default customer types if empty
     const { rows } = await db.execute('SELECT COUNT(*) as cnt FROM customer_types');

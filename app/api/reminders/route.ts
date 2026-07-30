@@ -18,9 +18,34 @@ export async function POST(request: NextRequest) {
   if (!body.content?.trim()) return NextResponse.json({ error: '内容不能为空' }, { status: 400 });
 
   const db = await ensureDb();
+
+  // If no customer_id, try inserting with null; if table doesn't support null, fall back to calendar event
+  if (!body.customer_id) {
+    try {
+      const result = await db.execute({
+        sql: `INSERT INTO reminders (customer_id, content, location, remind_date) VALUES (NULL, ?, ?, ?)`,
+        args: [body.content.trim(), body.location || null, body.remind_date || null],
+      });
+      const { rows: [reminder] } = await db.execute({ sql: 'SELECT * FROM reminders WHERE id = ?', args: [result.lastInsertRowid!] });
+      return NextResponse.json(reminder, { status: 201 });
+    } catch {
+      // Table still has NOT NULL on customer_id — fall back to calendar event
+      await db.execute({
+        sql: `INSERT INTO calendar_events (title, event_date, event_time, description) VALUES (?, ?, ?, ?)`,
+        args: [
+          body.content.trim(),
+          body.remind_date || new Date().toISOString().substring(0, 10),
+          null,
+          body.location ? `📍 ${body.location}` : '',
+        ],
+      });
+      return NextResponse.json({ fallback: 'calendar', content: body.content }, { status: 201 });
+    }
+  }
+
   const result = await db.execute({
     sql: `INSERT INTO reminders (customer_id, content, location, remind_date) VALUES (?, ?, ?, ?)`,
-    args: [body.customer_id || null, body.content.trim(), body.location || null, body.remind_date || null],
+    args: [body.customer_id, body.content.trim(), body.location || null, body.remind_date || null],
   });
 
   const { rows: [reminder] } = await db.execute({ sql: 'SELECT * FROM reminders WHERE id = ?', args: [result.lastInsertRowid!] });
