@@ -67,15 +67,15 @@ function RelationBars({ data, colorMap = {}, labelMap = {} }: { data: { type: st
   const total = data.reduce((s, d) => s + d.count, 0);
   if (total === 0) return null;
   return (
-    <div className="space-y-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+    <div className="space-y-1.5 mt-3 pt-3 border-t flex-1 overflow-y-auto min-h-0" style={{ borderColor: 'var(--border)' }}>
       {data.map(d => (
-        <div key={d.type}>
-          <div className="flex justify-between mb-1">
-            <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: colorMap[d.type] || '#6b7280' }} />
-              {labelMap[d.type] || d.type}
+        <div key={d.type} className="flex-shrink-0">
+          <div className="flex justify-between mb-0.5">
+            <span className="text-xs text-zinc-400 flex items-center gap-1.5 min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: colorMap[d.type] || '#6b7280' }} />
+              <span className="truncate">{labelMap[d.type] || d.type || '未分类'}</span>
             </span>
-            <span className="text-xs text-zinc-500">{d.count}家 · {Math.round(d.count / total * 100)}%</span>
+            <span className="text-xs text-zinc-500 flex-shrink-0 ml-2">{d.count}家 · {Math.round(d.count / total * 100)}%</span>
           </div>
           <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-track)' }}>
             <div className="h-full rounded-full" style={{ width: `${d.count / total * 100}%`, background: colorMap[d.type] || '#6b7280' }} />
@@ -518,8 +518,10 @@ export default function DashboardPage() {
           {/* 客户分布图 */}
           <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 280 }}>
             <CardHeader title="客户分布" />
-            <div className="flex-1 flex flex-col justify-center overflow-hidden">
-              <DonutChart data={data?.customersByType || []} size={76} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-shrink-0">
+                <DonutChart data={data?.customersByType || []} size={76} colorMap={typeColorMap} labelMap={typeLabelMap} />
+              </div>
               <RelationBars data={data?.customersByType || []} colorMap={typeColorMap} labelMap={typeLabelMap} />
             </div>
           </div>
@@ -640,8 +642,10 @@ export default function DashboardPage() {
         {/* 客户分布 */}
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 320 }}>
           <CardHeader title="客户分布" />
-          <div className="flex-1 flex flex-col justify-center overflow-hidden">
-            <DonutChart data={data?.customersByType || []} size={96} colorMap={typeColorMap} labelMap={typeLabelMap} />
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-shrink-0">
+              <DonutChart data={data?.customersByType || []} size={96} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            </div>
             <RelationBars data={data?.customersByType || []} colorMap={typeColorMap} labelMap={typeLabelMap} />
           </div>
         </div>
