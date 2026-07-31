@@ -42,12 +42,12 @@ function DonutChart({ data, size = 80, colorMap = {}, labelMap = {} }: { data: {
     return `M${x1} ${y1} A${r} ${r} 0 ${p > 0.5 ? 1 : 0} 1 ${x2} ${y2} L${ix2} ${iy2} A${inner} ${inner} 0 ${p > 0.5 ? 1 : 0} 0 ${ix1} ${iy1}Z`;
   }
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-col items-center gap-3 w-full">
       <svg viewBox="0 0 100 100" style={{ width: size, height: size, flexShrink: 0 }}>
         {segs.map((s, i) => <path key={i} d={arc(s.p, s.s)} fill={colorMap[s.type] || '#6b7280'} />)}
         <text x="50" y="55" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700">{total}</text>
       </svg>
-      <div className="flex-1 space-y-1.5 min-w-0 overflow-y-auto" style={{ maxHeight: size + 10 }}>
+      <div className="w-full space-y-1.5 min-w-0 overflow-y-auto" style={{ maxHeight: size * 0.7 }}>
         {segs.map((s, i) => {
           const label = s.type ? (labelMap[s.type] || s.type) : '未分类';
           return (
@@ -403,7 +403,7 @@ export default function DashboardPage() {
           <div className="rounded-2xl p-3 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold text-white mb-2">客户分布</p>
             <div className="flex-1 overflow-y-auto">
-              <DonutChart data={data?.customersByType || []} size={64} colorMap={typeColorMap} labelMap={typeLabelMap} />
+              <DonutChart data={data?.customersByType || []} size={110} colorMap={typeColorMap} labelMap={typeLabelMap} />
             </div>
           </div>
           <div className="rounded-2xl p-3 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -522,7 +522,7 @@ export default function DashboardPage() {
           <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 280 }}>
             <CardHeader title="客户分布" />
             <div className="flex-1 flex items-center justify-center min-h-0">
-              <DonutChart data={data?.customersByType || []} size={100} colorMap={typeColorMap} labelMap={typeLabelMap} />
+              <DonutChart data={data?.customersByType || []} size={150} colorMap={typeColorMap} labelMap={typeLabelMap} />
             </div>
           </div>
         </div>
@@ -643,7 +643,7 @@ export default function DashboardPage() {
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 320 }}>
           <CardHeader title="客户分布" />
           <div className="flex-1 flex items-center justify-center min-h-0">
-            <DonutChart data={data?.customersByType || []} size={120} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            <DonutChart data={data?.customersByType || []} size={180} colorMap={typeColorMap} labelMap={typeLabelMap} />
           </div>
         </div>
       </div>
