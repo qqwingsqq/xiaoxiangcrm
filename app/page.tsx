@@ -47,16 +47,19 @@ function DonutChart({ data, size = 80, colorMap = {}, labelMap = {} }: { data: {
         {segs.map((s, i) => <path key={i} d={arc(s.p, s.s)} fill={colorMap[s.type] || '#6b7280'} />)}
         <text x="50" y="55" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700">{total}</text>
       </svg>
-      <div className="flex-1 space-y-1.5 min-w-0">
-        {segs.map((s, i) => (
-          <div key={i} className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colorMap[s.type] || '#6b7280' }} />
-              <span className="text-xs text-zinc-400 truncate">{labelMap[s.type] || s.type}</span>
+      <div className="flex-1 space-y-1.5 min-w-0 overflow-y-auto" style={{ maxHeight: size + 10 }}>
+        {segs.map((s, i) => {
+          const label = s.type ? (labelMap[s.type] || s.type) : '未分类';
+          return (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colorMap[s.type] || '#6b7280' }} />
+                <span className="text-xs text-zinc-400 truncate">{label}</span>
+              </div>
+              <span className="text-xs font-semibold text-zinc-200 flex-shrink-0">{s.count}</span>
             </div>
-            <span className="text-xs font-semibold text-zinc-200 flex-shrink-0">{s.count}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -518,11 +521,8 @@ export default function DashboardPage() {
           {/* 客户分布图 */}
           <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 280 }}>
             <CardHeader title="客户分布" />
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-shrink-0">
-                <DonutChart data={data?.customersByType || []} size={76} colorMap={typeColorMap} labelMap={typeLabelMap} />
-              </div>
-              <RelationBars data={data?.customersByType || []} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            <div className="flex-1 flex items-center justify-center min-h-0">
+              <DonutChart data={data?.customersByType || []} size={100} colorMap={typeColorMap} labelMap={typeLabelMap} />
             </div>
           </div>
         </div>
@@ -642,11 +642,8 @@ export default function DashboardPage() {
         {/* 客户分布 */}
         <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 320 }}>
           <CardHeader title="客户分布" />
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex-shrink-0">
-              <DonutChart data={data?.customersByType || []} size={96} colorMap={typeColorMap} labelMap={typeLabelMap} />
-            </div>
-            <RelationBars data={data?.customersByType || []} colorMap={typeColorMap} labelMap={typeLabelMap} />
+          <div className="flex-1 flex items-center justify-center min-h-0">
+            <DonutChart data={data?.customersByType || []} size={120} colorMap={typeColorMap} labelMap={typeLabelMap} />
           </div>
         </div>
       </div>
