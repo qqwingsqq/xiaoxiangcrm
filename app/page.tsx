@@ -27,12 +27,21 @@ interface DashData {
 }
 
 // ── 圆环图 ──────────────────────────────────────────────
-function DonutChart({ data, size = 80, colorMap = {}, labelMap = {} }: { data: { type: string; count: number }[]; size?: number; colorMap?: Record<string, string>; labelMap?: Record<string, string> }) {
+const FALLBACK_COLORS = ['#6b7280', '#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#e11d48'];
+
+function getTypeColor(type: string, colorMap: Record<string, string>, index: number): string {
+  if (colorMap[type]) return colorMap[type];
+  return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+}
+
+function DonutChart({ data, size = 120, colorMap = {}, labelMap = {} }: { data: { type: string; count: number }[]; size?: number; colorMap?: Record<string, string>; labelMap?: Record<string, string> }) {
   const total = data.reduce((s, d) => s + d.count, 0);
   if (total === 0) return <p className="text-xs text-zinc-600 text-center py-4">暂无数据</p>;
+  // 按数量降序排列，大的在前
+  const sorted = [...data].sort((a, b) => b.count - a.count);
   let cum = 0;
-  const cx = 50, cy = 50, r = 40, inner = 26;
-  const segs = data.map(d => { const s = cum; cum += d.count / total; return { ...d, s, p: d.count / total }; });
+  const cx = 50, cy = 50, r = 42, inner = 27;
+  const segs = sorted.map((d, i) => { const s = cum; cum += d.count / total; return { ...d, s, p: d.count / total, color: getTypeColor(d.type, colorMap, i) }; });
   function arc(p: number, s: number) {
     const a1 = s * 2 * Math.PI - Math.PI / 2, a2 = (s + p) * 2 * Math.PI - Math.PI / 2;
     const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
@@ -42,21 +51,25 @@ function DonutChart({ data, size = 80, colorMap = {}, labelMap = {} }: { data: {
     return `M${x1} ${y1} A${r} ${r} 0 ${p > 0.5 ? 1 : 0} 1 ${x2} ${y2} L${ix2} ${iy2} A${inner} ${inner} 0 ${p > 0.5 ? 1 : 0} 0 ${ix1} ${iy1}Z`;
   }
   return (
-    <div className="flex flex-col items-center gap-2 w-full h-full min-h-0">
-      <svg viewBox="0 0 100 100" style={{ width: size, height: size, flexShrink: 1, minHeight: 0, maxHeight: '100%' }}>
-        {segs.map((s, i) => <path key={i} d={arc(s.p, s.s)} fill={colorMap[s.type] || '#6b7280'} />)}
-        <text x="50" y="55" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700">{total}</text>
+    <div className="flex flex-col items-center w-full h-full min-h-0">
+      <svg viewBox="0 0 100 100" style={{ width: size, height: size, flexShrink: 0 }}>
+        {segs.map((s, i) => <path key={i} d={arc(s.p, s.s)} fill={s.color} />)}
+        <text x="50" y="47" textAnchor="middle" fill="#fff" fontSize="15" fontWeight="700">{total}</text>
+        <text x="50" y="59" textAnchor="middle" fill="#9ca3af" fontSize="6">客户总数</text>
       </svg>
-      <div className="w-full space-y-1 min-w-0 overflow-y-auto flex-shrink-0">
+      <div className="w-full space-y-1.5 overflow-y-auto min-h-0 flex-1 mt-2 pr-1">
         {segs.map((s, i) => {
-          const label = s.type ? (labelMap[s.type] || s.type) : '未分类';
+          const label = (s.type && s.type.trim()) ? (labelMap[s.type] || s.type) : '未分类';
           return (
             <div key={i} className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colorMap[s.type] || '#6b7280' }} />
-                <span className="text-xs text-zinc-400 truncate">{label}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+                <span className="text-xs text-zinc-300 truncate">{label}</span>
               </div>
-              <span className="text-xs font-semibold text-zinc-200 flex-shrink-0">{s.count}</span>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <span className="text-xs font-semibold text-zinc-100">{s.count}</span>
+                <span className="text-xs text-zinc-500">{Math.round(s.p * 100)}%</span>
+              </div>
             </div>
           );
         })}
@@ -399,14 +412,15 @@ export default function DashboardPage() {
         </div>
 
         {/* 客户分布 + 地址分布：2列 */}
-        <div className="grid grid-cols-2 gap-2" style={{ height: 220 }}>
-          <div className="rounded-2xl p-3 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <p className="text-xs font-semibold text-white mb-2">客户分布</p>
-            <DonutChart data={data?.customersByType || []} size={90} colorMap={typeColorMap} labelMap={typeLabelMap} />
+        <div className="grid grid-cols-2 gap-2" style={{ height: 260 }}>
+          <div className="rounded-2xl p-3 flex flex-col overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <p className="text-xs font-semibold text-white mb-2 flex-shrink-0">客户分布</p>
+            <div className="flex-1 min-h-0 flex items-center justify-center">
+              <DonutChart data={data?.customersByType || []} size={80} colorMap={typeColorMap} labelMap={typeLabelMap} />
             </div>
           </div>
-          <div className="rounded-2xl p-3 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <p className="text-xs font-semibold text-white mb-2">地址分布 <span className="font-normal text-zinc-500">({data?.customerLocations.length || 0}家)</span></p>
+          <div className="rounded-2xl p-3 flex flex-col overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <p className="text-xs font-semibold text-white mb-2 flex-shrink-0">地址分布 <span className="font-normal text-zinc-500">({data?.customerLocations.length || 0}家)</span></p>
             <LocationContent locations={data?.customerLocations || []} colorMap={typeColorMap} />
           </div>
         </div>
@@ -518,10 +532,10 @@ export default function DashboardPage() {
           </div>
 
           {/* 客户分布图 */}
-          <div className="rounded-2xl p-4 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 280 }}>
+          <div className="rounded-2xl p-4 flex flex-col overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 280 }}>
             <CardHeader title="客户分布" />
-            <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
-              <DonutChart data={data?.customersByType || []} size={120} colorMap={typeColorMap} labelMap={typeLabelMap} />
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <DonutChart data={data?.customersByType || []} size={110} colorMap={typeColorMap} labelMap={typeLabelMap} />
             </div>
           </div>
         </div>
@@ -639,10 +653,10 @@ export default function DashboardPage() {
         </div>
 
         {/* 客户分布 */}
-        <div className="rounded-2xl p-5 flex flex-col" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 320 }}>
+        <div className="rounded-2xl p-5 flex flex-col overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', height: 320 }}>
           <CardHeader title="客户分布" />
-          <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
-            <DonutChart data={data?.customersByType || []} size={140} colorMap={typeColorMap} labelMap={typeLabelMap} />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <DonutChart data={data?.customersByType || []} size={150} colorMap={typeColorMap} labelMap={typeLabelMap} />
           </div>
         </div>
       </div>
