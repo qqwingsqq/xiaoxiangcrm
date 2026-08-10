@@ -53,8 +53,30 @@ export async function analyzeImage(filePath: string, filename: string): Promise<
   return analyzeImageFromBuffer(fs.readFileSync(filePath), filename);
 }
 
-export async function testApiKey(): Promise<{ valid: boolean; error?: string }> {
+export async function testApiKey(key?: string): Promise<{ valid: boolean; error?: string }> {
   try {
+    if (key) {
+      // 用用户提供的 key 直接测试 OpenRouter API
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      });
+      if (resp.ok) return { valid: true };
+      if (resp.status === 429) return { valid: true };
+      if (resp.status === 401) return { valid: false, error: 'API Key 无效（401 认证失败）' };
+      if (resp.status === 403) return { valid: false, error: 'API Key 无权限（403）' };
+      const errText = await resp.text();
+      return { valid: false, error: `API错误 ${resp.status}: ${errText.substring(0, 100)}` };
+    }
+    // 没有传 key，用环境变量测试
     await callAI([{ role: 'user', content: 'hi' }], 10);
     return { valid: true };
   } catch (err) {

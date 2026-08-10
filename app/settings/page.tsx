@@ -880,7 +880,7 @@ export default function SettingsPage() {
         </Section>
 
         {/* ── Anthropic API Key ── */}
-        <Section title="Anthropic API Key（AI 分析功能）">
+        <Section title="AI API Key（AI 分析功能）">
           {aiKeySaved && !aiKeyEditing ? (
             <div className="space-y-3">
               <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
@@ -905,9 +905,9 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <Field label="API Key" hint="在 console.anthropic.com → API Keys 中获取">
+              <Field label="API Key" hint="在 openrouter.ai → Keys 中获取，格式 sk-or-v1-...">
                 <input value={aiKeyEditing ? aiKey : ''} onChange={e => { setAiKey(e.target.value); setAiKeyStatus('idle'); setAiKeyError(''); }}
-                  placeholder="sk-ant-api03-..." className={INP_CLS} style={INP_ST} />
+                  placeholder="sk-or-v1-..." className={INP_CLS} style={INP_ST} />
               </Field>
               <div className="flex gap-2">
                 <button onClick={async () => {
@@ -937,7 +937,7 @@ export default function SettingsPage() {
                 )}
               </div>
               {aiKeyError && <p className="text-xs text-red-400">{aiKeyError}</p>}
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Key 保存后同步到云端，文档上传、语音总结等 AI 功能均使用此 Key</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Key 保存后同步到云端，聊天整理、文档上传、语音总结等 AI 功能均使用此 Key（支持 OpenRouter API Key）</p>
             </div>
           )}
         </Section>
