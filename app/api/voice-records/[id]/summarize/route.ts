@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
-import Anthropic from '@anthropic-ai/sdk';
+import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
-const MODEL = 'claude-haiku-4-5-20251001';
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(_req: NextRequest, { params }: Params) {
@@ -14,19 +13,13 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!rec.transcript || !String(rec.transcript).trim()) return NextResponse.json({ error: '没有转写内容可以总结' }, { status: 400 });
 
   const { rows: keyRow } = await db.execute({ sql: `SELECT value FROM user_settings WHERE key='anthropic_key'`, args: [] });
-  const apiKey = (keyRow[0]?.value as string) || process.env.ANTHROPIC_API_KEY || '';
-  if (!apiKey) return NextResponse.json({ error: '未配置 Anthropic API Key，请在设置中添加' }, { status: 500 });
+  const apiKey = getApiKeyFromSettings(keyRow[0]?.value as string);
 
-  const client = new Anthropic({ apiKey });
-
-  let message;
+  let text: string;
   try {
-    message = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1500,
-      messages: [{
-        role: 'user',
-        content: `你是一个CRM客户跟进助手。以下是一段语音记录的转写内容，请分析并提取关键信息。
+    text = await callAI([{
+      role: 'user',
+      content: `你是一个CRM客户跟进助手。以下是一段语音记录的转写内容，请分析并提取关键信息。
 
 转写内容：
 ${rec.transcript}
@@ -38,22 +31,18 @@ ${rec.transcript}
   "keyPoints": ["要点1", "要点2", "要点3"],
   "followUpActions": ["需要跟进的事项1", "需要跟进的事项2"]
 }`,
-      }],
-    });
+    }], 1500);
   } catch (err) {
     const msg = String(err);
     let friendly = 'AI 请求失败：' + msg;
-    if (msg.includes('401')) friendly = 'API Key 无效（401），请在设置中检查 Anthropic API Key';
-    else if (msg.includes('403')) friendly = 'API Key 无权限（403），请到 console.anthropic.com 重新生成';
+    if (msg.includes('401')) friendly = 'API Key 无效（401），请检查配置';
+    else if (msg.includes('403')) friendly = 'API Key 无权限（403）';
     return NextResponse.json({ error: friendly }, { status: 500 });
   }
 
-  const raw = message.content[0];
-  if (raw.type !== 'text') return NextResponse.json({ error: 'AI 返回异常' }, { status: 500 });
-
   let result: { title: string; summary: string; keyPoints: string[]; followUpActions: string[] };
   try {
-    result = JSON.parse(raw.text.replace(/```json\n?|\n?```/g, '').trim());
+    result = parseAIResponse(text);
   } catch {
     return NextResponse.json({ error: 'AI 返回解析失败' }, { status: 500 });
   }

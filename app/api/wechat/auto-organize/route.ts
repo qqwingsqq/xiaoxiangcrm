@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
+import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
-// 内联认证
 function getUserId(req: NextRequest): number | null {
   const key = req.headers.get('x-api-key');
   const expected = process.env.MONITOR_API_KEY;
@@ -32,14 +32,11 @@ export async function POST(req: NextRequest) {
   const { batch_size = 8 } = await req.json().catch(() => ({}));
   const db = await ensureDb();
 
-  // 获取 AI API Key
   const settingsResult = await db.execute(
-    `SELECT value FROM user_settings WHERE key = 'ai_api_key'`
+    `SELECT value FROM user_settings WHERE key = 'anthropic_key'`
   );
-  const apiKey = (settingsResult.rows[0]?.value as string) || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: '未配置 API Key' }, { status: 500 });
+  const apiKey = getApiKeyFromSettings(settingsResult.rows[0]?.value as string);
 
-  // 获取 pending 记录
   const { rows: pending } = await db.execute({
     sql: `SELECT wc.id, wc.raw_content FROM wechat_chats wc
           JOIN customers c ON c.id = wc.customer_id
@@ -52,22 +49,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ done: true, processed: 0, remaining: 0 });
   }
 
-  // 动态导入 Anthropic SDK
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
-
   let processed = 0;
   let failed = 0;
 
   for (const row of pending) {
     try {
       const content = (row.raw_content as string).substring(0, 4000);
-      const msg = await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: `你是一个专业CRM销售助手。请分析以下微信聊天记录，提取销售跟进的关键信息。
+      const text = await callAI([{
+        role: 'user',
+        content: `你是一个专业CRM销售助手。请分析以下微信聊天记录，提取销售跟进的关键信息。
 
 聊天记录：
 ${content}
@@ -82,12 +72,8 @@ ${content}
   "intent_level": "hot/warm/cold",
   "key_points": ["重点1"]
 }`,
-        }],
-      });
-
-      const raw = msg.content[0];
-      if (raw.type !== 'text') throw new Error('AI返回格式错误');
-      const result = JSON.parse(raw.text.replace(/```json\n?|\n?```/g, '').trim());
+      }], 1000);
+      const result = parseAIResponse(text);
 
       await db.execute({
         sql: `UPDATE wechat_chats SET

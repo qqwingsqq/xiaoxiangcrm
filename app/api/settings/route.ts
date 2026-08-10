@@ -5,7 +5,7 @@ import { getSessionUser } from '@/lib/auth';
 const ALLOWED_KEYS = new Set([
   'display_name', 'phone', 'email', 'company', 'title', 'wechat_id',
   'amap_key', 'amap_security', 'theme', 'record_shortcut', 'password_hash',
-  'anthropic_key',
+  'anthropic_key', 'ai_api_key',
 ]);
 
 export async function GET(req: NextRequest) {

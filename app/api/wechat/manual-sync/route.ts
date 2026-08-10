@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { getMonitorUserId, getSessionUser } from '@/lib/auth';
+import { callAI, parseAIResponse } from '@/lib/openrouter';
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +10,6 @@ export async function POST(req: NextRequest) {
 
     const db = await ensureDb();
 
-    // 1. 统计 pending 分析任务数量（通过 customers 表过滤 user_id，兼容旧数据）
     const { rows: pendingRows } = await db.execute({
       sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
             JOIN customers c ON c.id = wc.customer_id
@@ -19,7 +19,6 @@ export async function POST(req: NextRequest) {
     });
     const pendingCount = (pendingRows[0] as any)?.cnt ?? 0;
 
-    // 2. 检查最近是否有新同步的记录（最近5分钟内创建的）
     const { rows: recentRows } = await db.execute({
       sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
             JOIN customers c ON c.id = wc.customer_id
@@ -29,7 +28,6 @@ export async function POST(req: NextRequest) {
     });
     const recentCount = (recentRows[0] as any)?.cnt ?? 0;
 
-    // 3. 如果有 pending 的，触发批量分析（最多10条）
     let analyzed = 0;
     if (pendingCount > 0) {
       try {
@@ -41,41 +39,29 @@ export async function POST(req: NextRequest) {
                 ORDER BY wc.created_at DESC LIMIT 10`,
           args: [userId],
         });
-        // 获取 AI API Key（键值对表结构）
-        const { rows: settingRows } = await db.execute({
-          sql: `SELECT value FROM user_settings WHERE key = 'ai_api_key' LIMIT 1`,
-          args: [],
-        });
-        const apiKey = (settingRows[0] as any)?.value;
-        if (apiKey && chatRows.length > 0) {
-          const { default: Anthropic } = await import('@anthropic-ai/sdk');
-          const client = new Anthropic({ apiKey });
-          for (const row of chatRows) {
-            const { rows: chats } = await db.execute({
-              sql: `SELECT raw_content FROM wechat_chats WHERE id = ?`,
-              args: [(row as any).id],
-            });
-            if (chats.length > 0) {
-              const raw = (chats[0] as any).raw_content;
-              try {
-                const msg = await client.messages.create({
-                  model: 'claude-haiku-4-5-20251001',
-                  max_tokens: 300,
-                  messages: [{ role: 'user', content: `分析这段微信聊天记录，返回JSON：{"summary":"摘要(50字内)","intent":"意向等级(high/medium/low/none)","next_action":"建议下一步"}\n\n聊天内容：${raw.substring(0, 2000)}` }],
-                });
-                const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
-                const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}');
-                await db.execute({
-                  sql: `UPDATE wechat_chats SET analysis_status = 'done', summary = ?, intent_level = ?, next_action = ? WHERE id = ?`,
-                  args: [parsed.summary || null, parsed.intent || null, parsed.next_action || null, (row as any).id],
-                });
-                analyzed++;
-              } catch {
-                await db.execute({
-                  sql: `UPDATE wechat_chats SET analysis_status = 'error' WHERE id = ?`,
-                  args: [(row as any).id],
-                });
-              }
+        for (const row of chatRows) {
+          const { rows: chats } = await db.execute({
+            sql: `SELECT raw_content FROM wechat_chats WHERE id = ?`,
+            args: [(row as any).id],
+          });
+          if (chats.length > 0) {
+            const raw = (chats[0] as any).raw_content;
+            try {
+              const text = await callAI([{
+                role: 'user',
+                content: `分析这段微信聊天记录，返回JSON：{"summary":"摘要(50字内)","intent":"意向等级(high/medium/low/none)","next_action":"建议下一步"}\n\n聊天内容：${raw.substring(0, 2000)}`,
+              }], 300);
+              const parsed = parseAIResponse(text);
+              await db.execute({
+                sql: `UPDATE wechat_chats SET analysis_status = 'done', summary = ?, intent_level = ?, next_action = ? WHERE id = ?`,
+                args: [parsed.summary || null, parsed.intent || null, parsed.next_action || null, (row as any).id],
+              });
+              analyzed++;
+            } catch {
+              await db.execute({
+                sql: `UPDATE wechat_chats SET analysis_status = 'error' WHERE id = ?`,
+                args: [(row as any).id],
+              });
             }
           }
         }

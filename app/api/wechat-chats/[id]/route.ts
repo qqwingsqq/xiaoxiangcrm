@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
-import Anthropic from '@anthropic-ai/sdk';
+import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
 async function verifyOwnership(db: Awaited<ReturnType<typeof ensureDb>>, chatId: string, userId: number) {
   const { rows } = await db.execute({
@@ -44,16 +44,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { rows: [chat] } = await db.execute({ sql: 'SELECT * FROM wechat_chats WHERE id = ?', args: [id] });
   if (!chat) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  const { rows: [settingsRow] } = await db.execute({ sql: "SELECT value FROM user_settings WHERE key = 'ai_api_key'", args: [] });
-  const apiKey = settingsRow ? (settingsRow.value as string) : process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: '未配置 ANTHROPIC_API_KEY' }, { status: 400 });
+  const { rows: [settingsRow] } = await db.execute({ sql: "SELECT value FROM user_settings WHERE key = 'anthropic_key'", args: [] });
+  const apiKey = getApiKeyFromSettings(settingsRow?.value as string);
 
-  const client = new Anthropic({ apiKey });
   const raw_content = chat.raw_content as string;
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2000,
-    messages: [{
+  try {
+    const text = await callAI([{
       role: 'user',
       content: `你是一个专业CRM销售助手。请分析以下微信聊天记录，提取销售跟进的关键信息。
 
@@ -69,29 +65,29 @@ ${raw_content.substring(0, 6000)}
   "intent_level": "hot/warm/cold（hot=明确意向，warm=有兴趣，cold=暂无意向）",
   "key_points": ["其他重点1", "其他重点2"]
 }`,
-    }],
-  });
-  const rawText = msg.content[0];
-  if (rawText.type !== 'text') return NextResponse.json({ error: 'AI返回格式错误' }, { status: 500 });
-  const result = JSON.parse(rawText.text.replace(/```json\n?|\n?```/g, '').trim());
+    }], 2000);
+    const result = parseAIResponse(text);
 
-  await db.execute({
-    sql: `UPDATE wechat_chats SET
-      summary = ?, next_meeting = ?,
-      discussed_features = ?, next_steps = ?,
-      intent_level = ?, key_points = ?,
-      analysis_status = 'done'
-      WHERE id = ?`,
-    args: [
-      result.summary || '',
-      result.next_meeting || null,
-      JSON.stringify(result.discussed_features || []),
-      JSON.stringify(result.next_steps || []),
-      result.intent_level || 'unknown',
-      JSON.stringify(result.key_points || []),
-      id,
-    ],
-  });
-  const { rows: [updated] } = await db.execute({ sql: 'SELECT * FROM wechat_chats WHERE id = ?', args: [id] });
-  return NextResponse.json(updated);
+    await db.execute({
+      sql: `UPDATE wechat_chats SET
+        summary = ?, next_meeting = ?,
+        discussed_features = ?, next_steps = ?,
+        intent_level = ?, key_points = ?,
+        analysis_status = 'done'
+        WHERE id = ?`,
+      args: [
+        result.summary || '',
+        result.next_meeting || null,
+        JSON.stringify(result.discussed_features || []),
+        JSON.stringify(result.next_steps || []),
+        result.intent_level || 'unknown',
+        JSON.stringify(result.key_points || []),
+        id,
+      ],
+    });
+    const { rows: [updated] } = await db.execute({ sql: 'SELECT * FROM wechat_chats WHERE id = ?', args: [id] });
+    return NextResponse.json(updated);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }

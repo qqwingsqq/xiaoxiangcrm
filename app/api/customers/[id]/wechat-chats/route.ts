@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
-import Anthropic from '@anthropic-ai/sdk';
+import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
-async function analyzeWechatChat(content: string, apiKey?: string) {
-  const key = apiKey || process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('未配置 ANTHROPIC_API_KEY');
-  const client = new Anthropic({ apiKey: key });
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: `你是一个专业CRM销售助手。请分析以下微信聊天记录，提取销售跟进的关键信息。
+async function analyzeWechatChat(content: string, dbKey?: string) {
+  const apiKey = getApiKeyFromSettings(dbKey);
+  const text = await callAI([{
+    role: 'user',
+    content: `你是一个专业CRM销售助手。请分析以下微信聊天记录，提取销售跟进的关键信息。
 
 聊天记录：
 ${content.substring(0, 6000)}
@@ -26,11 +21,8 @@ ${content.substring(0, 6000)}
   "intent_level": "hot/warm/cold（hot=明确意向，warm=有兴趣，cold=暂无意向）",
   "key_points": ["其他重点1", "其他重点2"]
 }`,
-    }],
-  });
-  const raw = msg.content[0];
-  if (raw.type !== 'text') throw new Error('AI返回格式错误');
-  return JSON.parse(raw.text.replace(/```json\n?|\n?```/g, '').trim());
+  }], 2000);
+  return parseAIResponse(text);
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -39,9 +31,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const { id } = await params;
-  const since     = req.nextUrl.searchParams.get('since');
-  const contactId = req.nextUrl.searchParams.get('contact_id');
-  const db        = await ensureDb();
+  const since  = req.nextUrl.searchParams.get('since');
+  const db     = await ensureDb();
 
   const { rows: owns } = await db.execute({
     sql: 'SELECT id FROM customers WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
@@ -49,29 +40,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   });
   if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
-  let sql = `SELECT wc.*, wc2.name as contact_name
-             FROM wechat_chats wc
-             LEFT JOIN wechat_contacts wc2 ON wc2.id = wc.wechat_contact_id
-             WHERE wc.customer_id = ?`;
-  let args: any[] = [id];
-
-  if (contactId) {
-    if (contactId === 'none') {
-      sql += ' AND wc.wechat_contact_id IS NULL';
-    } else {
-      sql += ' AND wc.wechat_contact_id = ?';
-      args.push(contactId);
-    }
-  }
-
-  if (since) {
-    sql += ' AND wc.created_at > ?';
-    args.push(since);
-  }
-
-  sql += ' ORDER BY wc.created_at DESC';
-
-  const { rows } = await db.execute({ sql, args });
+  const { rows } = await db.execute(since ? {
+    sql:  'SELECT * FROM wechat_chats WHERE customer_id = ? AND created_at > ? ORDER BY created_at DESC',
+    args: [id, since],
+  } : {
+    sql:  'SELECT * FROM wechat_chats WHERE customer_id = ? ORDER BY created_at DESC',
+    args: [id],
+  });
   return NextResponse.json(rows);
 }
 
@@ -81,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const { id } = await params;
-  const { raw_content, chat_date, auto_analyze, wechat_contact_id } = await req.json();
+  const { raw_content, chat_date, auto_analyze } = await req.json();
   if (!raw_content?.trim()) return NextResponse.json({ error: '聊天内容不能为空' }, { status: 400 });
 
   const db = await ensureDb();
@@ -92,18 +67,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (!owns.length) return NextResponse.json({ error: '客户不存在' }, { status: 404 });
 
-  if (wechat_contact_id) {
-    const { rows: contactOwns } = await db.execute({
-      sql: 'SELECT id FROM wechat_contacts WHERE id = ? AND customer_id = ?',
-      args: [wechat_contact_id, id],
-    });
-    if (!contactOwns.length) return NextResponse.json({ error: '联系人不存在' }, { status: 404 });
-  }
-
   const { rows: [{ last_id }] } = await db.execute({
-    sql: `INSERT INTO wechat_chats (customer_id, wechat_contact_id, raw_content, chat_date, analysis_status)
-          VALUES (?, ?, ?, ?, 'pending') RETURNING id as last_id`,
-    args: [id, wechat_contact_id || null, raw_content, chat_date || null],
+    sql: `INSERT INTO wechat_chats (customer_id, raw_content, chat_date, analysis_status)
+          VALUES (?, ?, ?, 'pending') RETURNING id as last_id`,
+    args: [id, raw_content, chat_date || null],
   });
   const chatId = last_id as number;
 
@@ -111,11 +78,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     try {
       const db2 = await ensureDb();
       const { rows: [settingsRow] } = await db2.execute({
-        sql: "SELECT value FROM user_settings WHERE key = 'ai_api_key'",
+        sql: "SELECT value FROM user_settings WHERE key = 'anthropic_key'",
         args: [],
       });
-      const apiKey = settingsRow ? (settingsRow.value as string) : undefined;
-      const result = await analyzeWechatChat(raw_content, apiKey);
+      const result = await analyzeWechatChat(raw_content, settingsRow?.value as string);
       await db2.execute({
         sql: `UPDATE wechat_chats SET
           summary = ?, next_meeting = ?,

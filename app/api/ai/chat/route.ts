@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { ensureDb } from '@/lib/db';
-
-async function getApiKey(): Promise<string> {
-  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-  const db = await ensureDb();
-  const { rows } = await db.execute({ sql: "SELECT value FROM user_settings WHERE key='anthropic_key'", args: [] });
-  const key = rows[0]?.value as string | undefined;
-  if (!key) throw new Error('未配置 API Key，请前往设置页面配置');
-  return key;
-}
+import { callAI } from '@/lib/openrouter';
 
 export async function POST(req: NextRequest) {
   const { message, history = [] } = await req.json();
   if (!message?.trim()) return NextResponse.json({ error: '消息不能为空' }, { status: 400 });
-
-  let apiKey: string;
-  try { apiKey = await getApiKey(); }
-  catch (e) { return NextResponse.json({ error: String(e) }, { status: 400 }); }
 
   const db = await ensureDb();
   const { rows: customers } = await db.execute('SELECT id, name FROM customers ORDER BY created_at DESC LIMIT 60');
@@ -40,33 +27,26 @@ export async function POST(req: NextRequest) {
   {"type":"follow_up","customer_name":"客户名","title":"跟进标题","content":"具体内容","date":"YYYY-MM-DD或null"}
 - schedule：添加日程（会议、拜访、展会等）
   {"type":"schedule","title":"日程标题","date":"YYYY-MM-DD","time":"HH:MM或null","description":"备注"}
-- reminder：设置提醒（任何需要提醒的事项，不需要客户列表里有对应客户）
-  {"type":"reminder","content":"提醒内容","date":"YYYY-MM-DD或null","time":"HH:MM或null","location":"地点或null"}
+- reminder：设置提醒（仅当明确提到客户列表中某个客户名时使用）
+  {"type":"reminder","customer_name":"客户名","content":"提醒内容","date":"YYYY-MM-DD或null"}
 - none：普通对话
   {"type":"none"}
 
 规则：
 - 相对日期（明天、下周五等）请计算成具体日期
 - 如果用户提到客户名，优先从客户列表中匹配，保持原始说法
-- 提醒类型不需要关联客户，直接记录提醒内容、时间、地点即可
-- 如果用户说"提醒我明天上午9点去宝安见张总"，应提取：date=明天日期, time=09:00, location=宝安, content=见张总
-- 如果用户说"提醒我下午3点在公司开会"，应提取：time=15:00, location=公司, content=开会
+- 如果用户说"提醒我去见客户"、"提醒我联系一下"等，但未指明客户列表里的具体客户名，请使用schedule类型而不是reminder类型
 - 每条消息只返回一个[ACTION]
 - [ACTION]内只能是有效JSON，不要换行注释`;
 
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system: systemPrompt,
-      messages: [
-        ...(history as { role: 'user' | 'assistant'; content: string }[]),
-        { role: 'user', content: message.trim() },
-      ],
-    });
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      ...(history as { role: 'user' | 'assistant'; content: string }[]),
+      { role: 'user' as const, content: message.trim() },
+    ];
+    const raw = await callAI(messages, 512);
 
-    const raw = response.content[0].type === 'text' ? response.content[0].text : '';
     const actionMatch = raw.match(/\[ACTION\]([\s\S]*?)\[\/ACTION\]/);
     let action: Record<string, unknown> | null = null;
     const reply = raw.replace(/\[ACTION\][\s\S]*?\[\/ACTION\]/g, '').trim();
