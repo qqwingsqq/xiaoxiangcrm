@@ -85,6 +85,8 @@ export default function WeChatDashboard() {
   const [blWxid, setBlWxid]         = useState('');
   const [blName, setBlName]         = useState('');
   const [organizing, setOrganizing] = useState(false);
+  const [orgError, setOrgError] = useState('');
+  const [orgDone, setOrgDone] = useState('');
   const [orgProgress, setOrgProgress] = useState<{ done: number; remaining: number } | null>(null);
   // 微信同步说明：手机端通过 realtime-append API 实时推送，无需手动触发
   // 历史记录展开状态
@@ -136,6 +138,8 @@ export default function WeChatDashboard() {
 
   const organizeAll = useCallback(async () => {
     setOrganizing(true);
+    setOrgError('');
+    setOrgDone('');
     setOrgProgress({ done: 0, remaining: 0 });
     let totalDone = 0;
     while (true) {
@@ -144,12 +148,29 @@ export default function WeChatDashboard() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ batch_size: 8 }),
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          setOrgError(errData.error || 'API请求失败，状态码 ' + res.status);
+          break;
+        }
         const data = await res.json();
+        if (data.failed > 0 && data.processed === 0) {
+          setOrgError('AI分析失败，请在设置页面检查API Key是否正确配置');
+          break;
+        }
         totalDone += data.processed ?? 0;
         setOrgProgress({ done: totalDone, remaining: data.remaining ?? 0 });
         if (data.done || data.remaining === 0) break;
         await new Promise(r => setTimeout(r, 800));
-      } catch { break; }
+      } catch (e) {
+        setOrgError('网络错误：' + String(e).substring(0, 100));
+        break;
+      }
+    }
+    if (totalDone > 0) {
+      setOrgDone("整理完成，共处理 " + totalDone + " 条记录");
+    } else if (!orgError) {
+      setOrgDone('没有需要整理的新记录');
     }
     setOrganizing(false);
     loadChats();
@@ -287,6 +308,8 @@ export default function WeChatDashboard() {
                   </>
                 ) : '✨ 一键整理'}
               </button>
+              {orgError && <p className='text-xs text-red-400 mt-1'>{orgError}</p>}
+              {orgDone && !orgError && <p className='text-xs text-green-400 mt-1'>{orgDone}</p>}
             </div>
           </div>
           {/* 右侧：返回 + 屏蔽名单（右下角） */}
