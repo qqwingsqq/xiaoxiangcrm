@@ -45,10 +45,10 @@ export async function GET(req: NextRequest) {
         AND wc.id = (
           SELECT w4.id FROM wechat_chats w4
           WHERE w4.customer_id = wc.customer_id
-          ORDER BY w4.created_at DESC
+          ORDER BY w4.chat_date DESC, w4.created_at DESC
           LIMIT 1
         )
-      ORDER BY wc.created_at DESC
+      ORDER BY latest_date DESC, wc.created_at DESC
     `,
     args: [session.id],
   });
