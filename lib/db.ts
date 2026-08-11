@@ -188,6 +188,7 @@ export async function ensureDb(): Promise<Client> {
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN wechat_contact_id INTEGER'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN user_id INTEGER'); } catch (_) {}
     try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN next_action TEXT'); } catch (_) {}
+    try { await db.execute('ALTER TABLE wechat_chats ADD COLUMN last_message_at TEXT'); } catch (_) {}
     // Migrate reminders: add location column (idempotent, safe)
     try {
       const { rows: reminderCols } = await db.execute("PRAGMA table_info(reminders)");

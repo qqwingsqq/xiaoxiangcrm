@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   const userId = getMonitorUserId(req) ?? getSessionUser(req)?.id;
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { wxid, name, date, content } = await req.json();
+  const { wxid, name, date, content, message_time } = await req.json();
   if (!wxid || !content) return NextResponse.json({ error: 'missing fields' }, { status: 400 });
 
   const db = await ensureDb();
@@ -58,14 +58,14 @@ export async function POST(req: NextRequest) {
   if (existing.length > 0) {
     const newContent = (existing[0].raw_content as string) + '\n' + content;
     await db.execute({
-      sql: `UPDATE wechat_chats SET raw_content = ?, analysis_status = 'pending', created_at = datetime('now', 'localtime') WHERE id = ?`,
-      args: [newContent, existing[0].id],
+      sql: "UPDATE wechat_chats SET raw_content = ?, analysis_status = 'pending', created_at = datetime('now', 'localtime'), last_message_at = ? WHERE id = ?",
+      args: [newContent, message_time || null, existing[0].id],
     });
     return NextResponse.json({ action: 'appended', chat_id: existing[0].id });
   } else {
     const ins = await db.execute({
-      sql: `INSERT INTO wechat_chats (customer_id, wechat_contact_id, raw_content, chat_date, analysis_status) VALUES (?, ?, ?, ?, 'pending') RETURNING id`,
-      args: [customerId, wechatContactId, content, date],
+      sql: "INSERT INTO wechat_chats (customer_id, wechat_contact_id, raw_content, chat_date, analysis_status, last_message_at) VALUES (?, ?, ?, ?, 'pending', ?) RETURNING id",
+      args: [customerId, wechatContactId, content, date, message_time || null],
     });
     return NextResponse.json({ action: 'created', chat_id: ins.rows[0].id });
   }
