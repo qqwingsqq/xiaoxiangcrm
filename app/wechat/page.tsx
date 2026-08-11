@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useOrganize } from '../OrganizeProvider';
 
 // ── Types ─────────────────────────────────────────────────────
 interface ChatRow {
@@ -84,10 +85,8 @@ export default function WeChatDashboard() {
   const [blocklist, setBlocklist]   = useState<BlocklistItem[]>([]);
   const [blWxid, setBlWxid]         = useState('');
   const [blName, setBlName]         = useState('');
-  const [organizing, setOrganizing] = useState(false);
-  const [orgError, setOrgError] = useState('');
-  const [orgDone, setOrgDone] = useState('');
-  const [orgProgress, setOrgProgress] = useState<{ done: number; remaining: number } | null>(null);
+  // 整理状态来自全局 OrganizeProvider，支持后台持续整理
+  const { organizing, progress: orgProgress, error: orgError, done: orgDone, startOrganize } = useOrganize();
   // 微信同步说明：手机端通过 realtime-append API 实时推送，无需手动触发
   // 历史记录展开状态
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
@@ -102,6 +101,11 @@ export default function WeChatDashboard() {
   }, []);
 
   useEffect(() => { loadChats(); }, [loadChats]);
+
+  // 整理完成后自动刷新聊天列表
+  useEffect(() => {
+    if (orgDone) loadChats();
+  }, [orgDone, loadChats]);
 
   useEffect(() => {
     const poll = setInterval(async () => {
@@ -135,46 +139,6 @@ export default function WeChatDashboard() {
       setHistoryLoading(prev => ({ ...prev, [customerId]: false }));
     }
   }, [expandedHistory, history]);
-
-  const organizeAll = useCallback(async () => {
-    setOrganizing(true);
-    setOrgError('');
-    setOrgDone('');
-    setOrgProgress({ done: 0, remaining: 0 });
-    let totalDone = 0;
-    while (true) {
-      try {
-        const res = await fetch('/api/wechat/batch-analyze', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ batch_size: 8 }),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          setOrgError(errData.error || 'API请求失败，状态码 ' + res.status);
-          break;
-        }
-        const data = await res.json();
-        if (data.failed > 0 && data.processed === 0) {
-          setOrgError('AI分析失败，请在设置页面检查API Key是否正确配置');
-          break;
-        }
-        totalDone += data.processed ?? 0;
-        setOrgProgress({ done: totalDone, remaining: data.remaining ?? 0 });
-        if (data.done || data.remaining === 0) break;
-        await new Promise(r => setTimeout(r, 800));
-      } catch (e) {
-        setOrgError('网络错误：' + String(e).substring(0, 100));
-        break;
-      }
-    }
-    if (totalDone > 0) {
-      setOrgDone("整理完成，共处理 " + totalDone + " 条记录");
-    } else if (!orgError) {
-      setOrgDone('没有需要整理的新记录');
-    }
-    setOrganizing(false);
-    loadChats();
-  }, [loadChats]);
 
   const loadBlocklist = useCallback(() => {
     fetch('/api/wechat/blocklist').then(r => r.json()).then(setBlocklist);
@@ -298,7 +262,7 @@ export default function WeChatDashboard() {
                   ✓ 新增 {syncResult.added} 条
                 </span>
               )}
-              <button onClick={organizeAll} disabled={organizing}
+              <button onClick={startOrganize} disabled={organizing}
                 className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60 flex items-center gap-1.5 transition-opacity"
                 style={{ background: organizing ? '#1a3a1a' : '#16a34a' }}>
                 {organizing ? (
