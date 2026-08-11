@@ -1,4 +1,4 @@
-const OPENROUTER_MODEL = 'google/gemini-2.5-flash';
+const OPENROUTER_MODEL = 'deepseek/deepseek-chat';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 type ContentPart = { type: string; text?: string; image_url?: { url: string } };
@@ -18,8 +18,8 @@ export function getApiKeyFromSettings(dbKey?: string | null): string {
   return (dbKey && dbKey.startsWith('sk-or-')) ? dbKey : getApiKey();
 }
 
-export async function callAI(messages: ChatMessage[], maxTokens = 1000): Promise<string> {
-  const apiKey = getApiKey();
+export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOverride?: string): Promise<string> {
+  const apiKey = apiKeyOverride || getApiKey();
   const resp = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
@@ -34,7 +34,7 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000): Promise
   });
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`AI API错误 ${resp.status}: ${errText.substring(0, 200)}`);
+    throw new Error(`AI API错误 ${resp.status}: ${errText.substring(0, 300)}`);
   }
   const data = await resp.json();
   return data.choices?.[0]?.message?.content || '';
