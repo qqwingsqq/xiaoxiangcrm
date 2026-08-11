@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
