@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const { rows } = await db.execute({
     sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
           JOIN customers c ON c.id = wc.customer_id
-          WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)`,
+          WHERE (wc.analysis_status = 'pending' OR wc.analysis_status = 'error') AND (c.user_id = ? OR c.user_id IS NULL)`,
     args: [session.id],
   });
   const total = await db.execute({
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   const { rows: pending } = await db.execute({
     sql: `SELECT wc.id, wc.raw_content FROM wechat_chats wc
           JOIN customers c ON c.id = wc.customer_id
-          WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)
+          WHERE (wc.analysis_status = 'pending' OR wc.analysis_status = 'error') AND (c.user_id = ? OR c.user_id IS NULL)
           LIMIT ?`,
     args: [session.id, batch_size],
   });
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
   const { rows: [remaining] } = await db.execute({
     sql: `SELECT COUNT(*) as cnt FROM wechat_chats wc
           JOIN customers c ON c.id = wc.customer_id
-          WHERE wc.analysis_status = 'pending' AND (c.user_id = ? OR c.user_id IS NULL)`,
+          WHERE (wc.analysis_status = 'pending' OR wc.analysis_status = 'error') AND (c.user_id = ? OR c.user_id IS NULL)`,
     args: [session.id],
   });
 
