@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (existing.length > 0) {
     const newContent = (existing[0].raw_content as string) + '\n' + content;
     await db.execute({
-      sql: `UPDATE wechat_chats SET raw_content = ?, analysis_status = 'pending' WHERE id = ?`,
+      sql: `UPDATE wechat_chats SET raw_content = ?, analysis_status = 'pending', created_at = datetime('now', 'localtime') WHERE id = ?`,
       args: [newContent, existing[0].id],
     });
     return NextResponse.json({ action: 'appended', chat_id: existing[0].id });
