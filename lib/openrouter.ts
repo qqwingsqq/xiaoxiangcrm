@@ -1,4 +1,4 @@
-const OPENROUTER_MODEL = 'deepseek/deepseek-chat';
+const OPENROUTER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
@@ -19,17 +19,15 @@ function isOpenRouterKey(key: string): boolean {
 }
 
 export function getApiKey(): string {
-  // 优先使用 ANTHROPIC_API_KEY（有额度），其次 OPENROUTER_API_KEY
-  const key = process.env.ANTHROPIC_API_KEY || process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error('未配置 ANTHROPIC_API_KEY 或 OPENROUTER_API_KEY');
+  // 优先使用 OPENROUTER_API_KEY（免费模型可用），其次 ANTHROPIC_API_KEY
+  const key = process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('未配置 OPENROUTER_API_KEY 或 ANTHROPIC_API_KEY');
   return key;
 }
 
-// 从数据库设置中获取 API Key
-// 只接受 Anthropic key（因为 setting 名为 anthropic_key）
-// 如果数据库存的是 OpenRouter key，则忽略并回退到环境变量
+// 从数据库设置中获取 API Key，支持 OpenRouter 和 Anthropic 两种 key
 export function getApiKeyFromSettings(dbKey?: string | null): string {
-  if (dbKey && isAnthropicKey(dbKey)) return dbKey;
+  if (dbKey && (isOpenRouterKey(dbKey) || isAnthropicKey(dbKey))) return dbKey;
   return getApiKey();
 }
 
@@ -80,7 +78,7 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
     const data = await resp.json();
     return data.content?.[0]?.text || '';
   } else {
-    // 使用 OpenRouter API
+    // 使用 OpenRouter API (免费模型)
     const resp = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {

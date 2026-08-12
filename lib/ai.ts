@@ -58,7 +58,6 @@ export async function testApiKey(key?: string): Promise<{ valid: boolean; error?
     if (key) {
       const isAnthropic = key.startsWith('sk-ant-');
       if (isAnthropic) {
-        // 测试 Anthropic API
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -79,7 +78,6 @@ export async function testApiKey(key?: string): Promise<{ valid: boolean; error?
         const errText = await resp.text();
         return { valid: false, error: `Anthropic API错误 ${resp.status}: ${errText.substring(0, 100)}` };
       } else {
-        // 测试 OpenRouter API
         const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -87,7 +85,7 @@ export async function testApiKey(key?: string): Promise<{ valid: boolean; error?
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'deepseek/deepseek-chat',
+            model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
             max_tokens: 10,
             messages: [{ role: 'user', content: 'hi' }],
           }),
@@ -100,7 +98,6 @@ export async function testApiKey(key?: string): Promise<{ valid: boolean; error?
         return { valid: false, error: `OpenRouter API错误 ${resp.status}: ${errText.substring(0, 100)}` };
       }
     }
-    // 没有传 key，用环境变量测试
     await callAI([{ role: 'user', content: 'hi' }], 10);
     return { valid: true };
   } catch (err) {
