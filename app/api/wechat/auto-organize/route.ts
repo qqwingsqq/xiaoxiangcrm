@@ -73,7 +73,7 @@ ${content}
   "intent_level": "hot/warm/cold",
   "key_points": ["重点1"]
 }`,
-      }], 1000, apiKey);
+      }], 1500, apiKey);
       const result = parseAIResponse(text);
 
       await db.execute({
@@ -104,6 +104,8 @@ ${content}
       });
       failed++;
     }
+    // Add delay between API calls to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   const remainingResult = await db.execute({

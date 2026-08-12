@@ -19,23 +19,19 @@ function isOpenRouterKey(key: string): boolean {
 }
 
 export function getApiKey(): string {
-  // 优先使用 OPENROUTER_API_KEY（免费模型可用），其次 ANTHROPIC_API_KEY
   const key = process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error('未配置 OPENROUTER_API_KEY 或 ANTHROPIC_API_KEY');
   return key;
 }
 
-// 从数据库设置中获取 API Key，支持 OpenRouter 和 Anthropic 两种 key
 export function getApiKeyFromSettings(dbKey?: string | null): string {
   if (dbKey && (isOpenRouterKey(dbKey) || isAnthropicKey(dbKey))) return dbKey;
   return getApiKey();
 }
 
-// 将 ChatMessage[] 转换为 Anthropic 格式
 function toAnthropicMessages(messages: ChatMessage[]): { system: string; messages: any[] } {
   let system = '';
   const anthropicMessages: any[] = [];
-
   for (const msg of messages) {
     if (msg.role === 'system') {
       const text = typeof msg.content === 'string' ? msg.content : '';
@@ -47,7 +43,6 @@ function toAnthropicMessages(messages: ChatMessage[]): { system: string; message
       anthropicMessages.push({ role: msg.role, content: text });
     }
   }
-
   return { system, messages: anthropicMessages };
 }
 
@@ -55,7 +50,6 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
   const apiKey = apiKeyOverride || getApiKey();
 
   if (isAnthropicKey(apiKey)) {
-    // 使用 Anthropic API
     const { system, messages: anthropicMessages } = toAnthropicMessages(messages);
     const resp = await fetch(ANTHROPIC_URL, {
       method: 'POST',
@@ -78,7 +72,6 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
     const data = await resp.json();
     return data.content?.[0]?.text || '';
   } else {
-    // 使用 OpenRouter API (免费模型)
     const resp = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
@@ -101,5 +94,43 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
 }
 
 export function parseAIResponse(text: string): any {
-  return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
+  // Remove markdown code blocks
+  let cleaned = text.replace(/```json\n?|\n?```/g, '').trim();
+  
+  // Try direct parse first
+  try {
+    return JSON.parse(cleaned);
+  } catch {}
+  
+  // Try to extract JSON object from text
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch {}
+    
+    // Try to fix common JSON issues
+    let fixed = jsonMatch[0];
+    // Fix unterminated strings by finding the last complete field
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+    fixed = fixed.replace(/"([^"]*?)"/g, (match, p1) => {
+      // Escape unescaped quotes within string values
+      return '"' + p1.replace(/(?<!\\)"/g, '\\"') + '"';
+    });
+    try {
+      return JSON.parse(fixed);
+    } catch {}
+  }
+  
+  // If all parsing fails, return a default structure
+  console.error('[parseAIResponse] Failed to parse AI response:', cleaned.substring(0, 200));
+  return {
+    summary: cleaned.substring(0, 100) || '解析失败',
+    next_meeting: null,
+    next_action: null,
+    discussed_features: [],
+    next_steps: [],
+    intent_level: 'unknown',
+    key_points: [],
+  };
 }
