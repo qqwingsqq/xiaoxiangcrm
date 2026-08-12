@@ -10,18 +10,18 @@ export interface AnalysisResult {
 export async function analyzeText(text: string, filename: string): Promise<AnalysisResult> {
   const raw = await callAI([{
     role: 'user',
-    content: 你是一个CRM客户跟进记录分析助手。请分析以下文档，提取关键信息。
+    content: `你是一个CRM客户跟进记录分析助手。请分析以下文档，提取关键信息。
 
-文件名：{filename}
+文件名：${filename}
 内容：
-{text.substring(0, 8000)}
+${text.substring(0, 8000)}
 
 请以JSON格式返回（只返回JSON，不要其他内容）：
 {
   "summary": "内容摘要（150字以内）",
   "keyPoints": ["重点1", "重点2"],
   "reminders": [{"content": "跟进事项", "remind_date": "YYYY-MM-DD或null"}]
-},
+}`,
   }], 2000);
   return parseAIResponse(raw);
 }
@@ -34,15 +34,15 @@ export async function analyzeImageFromBuffer(buffer: Buffer, filename: string): 
   };
   const mediaType = mediaMap[ext] || 'image/jpeg';
   const base64 = buffer.toString('base64');
-  const dataUrl = data:{mediaType};base64,{base64};
+  const dataUrl = `data:${mediaType};base64,${base64}`;
 
   const raw = await callAI([{
     role: 'user',
     content: [
-      { type: 'text', text: 这是一份客户拜访相关的图片文件（{filename}）。请识别图中的文字内容并提取关键信息。
+      { type: 'text', text: `这是一份客户拜访相关的图片文件（${filename}）。请识别图中的文字内容并提取关键信息。
 
 以JSON格式返回（只返回JSON）：
-{"summary":"图片内容摘要","keyPoints":["重点1"],"reminders":[{"content":"跟进事项","remind_date":null}]} },
+{"summary":"图片内容摘要","keyPoints":["重点1"],"reminders":[{"content":"跟进事项","remind_date":null}]}` },
       { type: 'image_url', image_url: { url: dataUrl } },
     ],
   }], 2000);
@@ -55,14 +55,59 @@ export async function analyzeImage(filePath: string, filename: string): Promise<
 
 export async function testApiKey(key?: string): Promise<{ valid: boolean; error?: string }> {
   try {
-    // Test by calling callAI with the provided key
-    await callAI([{ role: 'user', content: 'Say OK' }], 10, key);
+    if (key) {
+      const isAnthropic = key.startsWith('sk-ant-');
+      if (isAnthropic) {
+        // 测试 Anthropic API
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+        });
+        if (resp.ok) return { valid: true };
+        if (resp.status === 429) return { valid: true };
+        if (resp.status === 401) return { valid: false, error: 'API Key 无效（401 认证失败）' };
+        if (resp.status === 403) return { valid: false, error: 'API Key 无权限（403）' };
+        const errText = await resp.text();
+        return { valid: false, error: `Anthropic API错误 ${resp.status}: ${errText.substring(0, 100)}` };
+      } else {
+        // 测试 OpenRouter API
+        const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'deepseek/deepseek-chat',
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+        });
+        if (resp.ok) return { valid: true };
+        if (resp.status === 429) return { valid: true };
+        if (resp.status === 401) return { valid: false, error: 'API Key 无效（401 认证失败）' };
+        if (resp.status === 403) return { valid: false, error: 'API Key 无权限（403）' };
+        const errText = await resp.text();
+        return { valid: false, error: `OpenRouter API错误 ${resp.status}: ${errText.substring(0, 100)}` };
+      }
+    }
+    // 没有传 key，用环境变量测试
+    await callAI([{ role: 'user', content: 'hi' }], 10);
     return { valid: true };
   } catch (err) {
     const msg = String(err);
     if (msg.includes('401')) return { valid: false, error: 'API Key 无效（401 认证失败）' };
     if (msg.includes('403')) return { valid: false, error: 'API Key 无权限（403）' };
     if (msg.includes('429')) return { valid: true };
-    return { valid: false, error: msg.substring(0, 150) };
+    return { valid: false, error: msg.substring(0, 100) };
   }
 }

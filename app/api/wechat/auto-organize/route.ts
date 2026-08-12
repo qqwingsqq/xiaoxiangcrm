@@ -11,9 +11,7 @@ function getUserId(req: NextRequest): number | null {
 
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({
-    lastError: lastError || undefined,
-     error: 'unauthorized' }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const db = await ensureDb();
   const pendingResult = await db.execute({
@@ -23,17 +21,13 @@ export async function GET(req: NextRequest) {
     args: [userId],
   });
   return NextResponse.json({
-    lastError: lastError || undefined,
-    
     pending: pendingResult.rows[0].cnt,
   });
 }
 
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({
-    lastError: lastError || undefined,
-     error: 'unauthorized' }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const { batch_size = 8 } = await req.json().catch(() => ({}));
   const db = await ensureDb();
@@ -52,14 +46,12 @@ export async function POST(req: NextRequest) {
   });
 
   if (pending.length === 0) {
-    return NextResponse.json({
-    lastError: lastError || undefined,
-     done: true, processed: 0, remaining: 0 });
+    return NextResponse.json({ done: true, processed: 0, remaining: 0 });
   }
 
   let processed = 0;
-  let lastError = '';
   let failed = 0;
+  let lastError = '';
 
   for (const row of pending) {
     try {
@@ -73,7 +65,7 @@ ${content}
 
 请以JSON格式返回（只返回JSON，不要其他内容）：
 {
-  "summary": "摘要必须包含两部分：①我方提供的信息/内容（我方说了什么、发送了什么资料）；②对方表达的态度或回应（如对方全程未回复则写对方未回复）。100字以内。",
+  "summary": "摘要必须包含两部分：①我方提供的信息/内容（我方说了什么、发送了什么资料）；②对方表达的态度或回应（如对方全程未回复则写"对方未回复"）。100字以内。",
   "next_meeting": "下次见面/沟通计划（如：后天上午10点线下碰面，或null）",
   "next_action": "需要提醒的重点事项（如发货日期、会议时间等，无则null）",
   "discussed_features": ["功能需求1"],
@@ -105,6 +97,7 @@ ${content}
       processed++;
     } catch (e) {
       console.error(`[auto-organize] Chat #${row.id} failed:`, String(e).substring(0, 300));
+      lastError = String(e).substring(0, 200);
       await db.execute({
         sql: `UPDATE wechat_chats SET analysis_status = 'error' WHERE id = ?`,
         args: [row.id],
@@ -121,11 +114,10 @@ ${content}
   });
 
   return NextResponse.json({
-    lastError: lastError || undefined,
-    
     done: (remainingResult.rows[0].cnt as number) === 0,
     processed,
     failed,
     remaining: remainingResult.rows[0].cnt,
+    lastError: lastError || undefined,
   });
 }

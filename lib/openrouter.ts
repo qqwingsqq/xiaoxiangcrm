@@ -1,8 +1,8 @@
-// AI API client - supports both Anthropic and OpenRouter
-const ANTHROPIC_MODEL = 'claude-3-5-haiku-20241022';
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const OPENROUTER_MODEL = 'deepseek/deepseek-chat';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
 type ContentPart = { type: string; text?: string; image_url?: { url: string } };
 interface ChatMessage {
@@ -19,42 +19,42 @@ function isOpenRouterKey(key: string): boolean {
 }
 
 export function getApiKey(): string {
-  // Try OPENROUTER_API_KEY first, then ANTHROPIC_API_KEY
   const key = process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('未配置 API Key（需要 OPENROUTER_API_KEY 或 ANTHROPIC_API_KEY）');
+  if (!key) throw new Error('未配置 OPENROUTER_API_KEY 或 ANTHROPIC_API_KEY');
   return key;
 }
 
-// Get API key from database settings, accept any valid key format
+// 从数据库设置中获取 API Key，支持 OpenRouter 和 Anthropic 两种 key
 export function getApiKeyFromSettings(dbKey?: string | null): string {
-  if (dbKey && (dbKey.startsWith('sk-or-') || dbKey.startsWith('sk-ant-'))) {
-    return dbKey;
-  }
+  if (dbKey && (isOpenRouterKey(dbKey) || isAnthropicKey(dbKey))) return dbKey;
   return getApiKey();
 }
 
-// Convert ChatMessage[] to Anthropic format
-function toAnthropicMessages(messages: ChatMessage[]) {
-  let systemPrompt = '';
-  const userMessages: any[] = [];
+// 将 ChatMessage[] 转换为 Anthropic 格式
+function toAnthropicMessages(messages: ChatMessage[]): { system: string; messages: any[] } {
+  let system = '';
+  const anthropicMessages: any[] = [];
+
   for (const msg of messages) {
     if (msg.role === 'system') {
-      systemPrompt = typeof msg.content === 'string' ? msg.content : '';
+      const text = typeof msg.content === 'string' ? msg.content : '';
+      system += (system ? '\n' : '') + text;
     } else {
-      const content = typeof msg.content === 'string'
+      const text = typeof msg.content === 'string'
         ? msg.content
-        : msg.content.map((p: any) => p.type === 'text' ? p.text : '').join('');
-      userMessages.push({ role: msg.role, content });
+        : msg.content.map(p => p.text || '').join('');
+      anthropicMessages.push({ role: msg.role, content: text });
     }
   }
-  return { system: systemPrompt, messages: userMessages };
+
+  return { system, messages: anthropicMessages };
 }
 
 export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOverride?: string): Promise<string> {
   const apiKey = apiKeyOverride || getApiKey();
 
   if (isAnthropicKey(apiKey)) {
-    // Use Anthropic API directly
+    // 使用 Anthropic API
     const { system, messages: anthropicMessages } = toAnthropicMessages(messages);
     const resp = await fetch(ANTHROPIC_URL, {
       method: 'POST',
@@ -67,17 +67,17 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
         model: ANTHROPIC_MODEL,
         max_tokens: maxTokens,
         system: system || undefined,
-        messages: anthropicMessages.length > 0 ? anthropicMessages : [{ role: 'user', content: 'hi' }],
+        messages: anthropicMessages,
       }),
     });
     if (!resp.ok) {
       const errText = await resp.text();
-      throw new Error(`Anthropic API错误 ${resp.status}: ${errText.substring(0, 300)}`);
+      throw new Error(`Anthropic API错误 ${resp.status}: ${errText.substring(0, 200)}`);
     }
     const data = await resp.json();
     return data.content?.[0]?.text || '';
   } else {
-    // Use OpenRouter API
+    // 使用 OpenRouter API
     const resp = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
@@ -92,7 +92,7 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
     });
     if (!resp.ok) {
       const errText = await resp.text();
-      throw new Error(`AI API错误 ${resp.status}: ${errText.substring(0, 300)}`);
+      throw new Error(`OpenRouter API错误 ${resp.status}: ${errText.substring(0, 200)}`);
     }
     const data = await resp.json();
     return data.choices?.[0]?.message?.content || '';
