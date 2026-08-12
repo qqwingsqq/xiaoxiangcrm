@@ -3,6 +3,8 @@ import { ensureDb } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
 import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
+export const maxDuration = 60;
+
 async function analyzeChat(content: string, apiKey: string) {
   const text = await callAI([{
     role: 'user',
@@ -20,7 +22,7 @@ ${content.substring(0, 4000)}
   "intent_level": "hot/warm/cold",
   "key_points": ["重点1"]
 }`,
-  }], 1000, apiKey);
+  }], 1500, apiKey);
   return parseAIResponse(text);
 }
 
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
   try { session = requireSession(req); } catch {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const { batch_size = 10 } = await req.json().catch(() => ({}));
+  const { batch_size = 3 } = await req.json().catch(() => ({}));
 
   const db = await ensureDb();
   const { rows: [settingsRow] } = await db.execute(

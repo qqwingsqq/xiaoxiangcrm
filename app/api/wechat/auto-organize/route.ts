@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
+export const maxDuration = 60;
+
 function getUserId(req: NextRequest): number | null {
   const key = req.headers.get('x-api-key');
   const expected = process.env.MONITOR_API_KEY;
