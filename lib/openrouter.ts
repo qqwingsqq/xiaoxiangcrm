@@ -19,14 +19,17 @@ function isOpenRouterKey(key: string): boolean {
 }
 
 export function getApiKey(): string {
-  const key = process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('未配置 OPENROUTER_API_KEY 或 ANTHROPIC_API_KEY');
+  // 优先使用 ANTHROPIC_API_KEY（有额度），其次 OPENROUTER_API_KEY
+  const key = process.env.ANTHROPIC_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error('未配置 ANTHROPIC_API_KEY 或 OPENROUTER_API_KEY');
   return key;
 }
 
-// 从数据库设置中获取 API Key，支持 OpenRouter 和 Anthropic 两种 key
+// 从数据库设置中获取 API Key
+// 只接受 Anthropic key（因为 setting 名为 anthropic_key）
+// 如果数据库存的是 OpenRouter key，则忽略并回退到环境变量
 export function getApiKeyFromSettings(dbKey?: string | null): string {
-  if (dbKey && (isOpenRouterKey(dbKey) || isAnthropicKey(dbKey))) return dbKey;
+  if (dbKey && isAnthropicKey(dbKey)) return dbKey;
   return getApiKey();
 }
 
