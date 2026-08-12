@@ -1,4 +1,4 @@
-const OPENROUTER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
+const OPENROUTER_MODEL = 'nvidia/nemotron-3-nano-30b-a3b:free';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
@@ -94,35 +94,25 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
 }
 
 export function parseAIResponse(text: string): any {
-  // Remove markdown code blocks
   let cleaned = text.replace(/```json\n?|\n?```/g, '').trim();
   
-  // Try direct parse first
   try {
     return JSON.parse(cleaned);
   } catch {}
   
-  // Try to extract JSON object from text
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       return JSON.parse(jsonMatch[0]);
     } catch {}
     
-    // Try to fix common JSON issues
     let fixed = jsonMatch[0];
-    // Fix unterminated strings by finding the last complete field
-    fixed = fixed.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
-    fixed = fixed.replace(/"([^"]*?)"/g, (match, p1) => {
-      // Escape unescaped quotes within string values
-      return '"' + p1.replace(/(?<!\\)"/g, '\\"') + '"';
-    });
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
     try {
       return JSON.parse(fixed);
     } catch {}
   }
   
-  // If all parsing fails, return a default structure
   console.error('[parseAIResponse] Failed to parse AI response:', cleaned.substring(0, 200));
   return {
     summary: cleaned.substring(0, 100) || '解析失败',

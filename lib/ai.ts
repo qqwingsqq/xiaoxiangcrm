@@ -85,7 +85,7 @@ export async function testApiKey(key?: string): Promise<{ valid: boolean; error?
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+            model: 'nvidia/nemotron-3-nano-30b-a3b:free',
             max_tokens: 10,
             messages: [{ role: 'user', content: 'hi' }],
           }),
