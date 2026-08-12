@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ensureDb } from '@/lib/db';
 import { callAI, parseAIResponse, getApiKeyFromSettings } from '@/lib/openrouter';
 
@@ -11,7 +11,9 @@ function getUserId(req: NextRequest): number | null {
 
 export async function GET(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!userId) return NextResponse.json({
+    lastError: lastError || undefined,
+     error: 'unauthorized' }, { status: 401 });
 
   const db = await ensureDb();
   const pendingResult = await db.execute({
@@ -21,13 +23,17 @@ export async function GET(req: NextRequest) {
     args: [userId],
   });
   return NextResponse.json({
+    lastError: lastError || undefined,
+    
     pending: pendingResult.rows[0].cnt,
   });
 }
 
 export async function POST(req: NextRequest) {
   const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!userId) return NextResponse.json({
+    lastError: lastError || undefined,
+     error: 'unauthorized' }, { status: 401 });
 
   const { batch_size = 8 } = await req.json().catch(() => ({}));
   const db = await ensureDb();
@@ -46,10 +52,13 @@ export async function POST(req: NextRequest) {
   });
 
   if (pending.length === 0) {
-    return NextResponse.json({ done: true, processed: 0, remaining: 0 });
+    return NextResponse.json({
+    lastError: lastError || undefined,
+     done: true, processed: 0, remaining: 0 });
   }
 
   let processed = 0;
+  let lastError = '';
   let failed = 0;
 
   for (const row of pending) {
@@ -112,6 +121,8 @@ ${content}
   });
 
   return NextResponse.json({
+    lastError: lastError || undefined,
+    
     done: (remainingResult.rows[0].cnt as number) === 0,
     processed,
     failed,
