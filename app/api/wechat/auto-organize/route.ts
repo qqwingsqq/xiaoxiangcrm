@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { batch_size = 8 } = await req.json().catch(() => ({}));
+  const { batch_size = 3 } = await req.json().catch(() => ({}));
   const db = await ensureDb();
 
   const settingsResult = await db.execute(
@@ -104,8 +104,6 @@ ${content}
       });
       failed++;
     }
-    // Add delay between API calls to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   const remainingResult = await db.execute({
