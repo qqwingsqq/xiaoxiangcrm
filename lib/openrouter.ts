@@ -4,6 +4,14 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
+// API2D (OpenAI compatible relay service)
+const API2D_URL = 'https://oa.api2d.net/v1/chat/completions';
+const API2D_MODEL = 'gpt-4o-mini';
+
+// OpenAI official
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_MODEL = 'gpt-4o-mini';
+
 type ContentPart = { type: string; text?: string; image_url?: { url: string } };
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -18,14 +26,22 @@ function isOpenRouterKey(key: string): boolean {
   return key.startsWith('sk-or-');
 }
 
+function isAPI2DKey(key: string): boolean {
+  return key.startsWith('fk');
+}
+
+function isOpenAIKey(key: string): boolean {
+  return key.startsWith('sk-') && !isOpenRouterKey(key) && !isAnthropicKey(key);
+}
+
 export function getApiKey(): string {
-  const key = process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('未配置 OPENROUTER_API_KEY 或 ANTHROPIC_API_KEY');
+  const key = process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
+  if (!key) throw new Error('未配置 API Key');
   return key;
 }
 
 export function getApiKeyFromSettings(dbKey?: string | null): string {
-  if (dbKey && (isOpenRouterKey(dbKey) || isAnthropicKey(dbKey))) return dbKey;
+  if (dbKey && (isOpenRouterKey(dbKey) || isAnthropicKey(dbKey) || isAPI2DKey(dbKey) || isOpenAIKey(dbKey))) return dbKey;
   return getApiKey();
 }
 
@@ -71,7 +87,48 @@ export async function callAI(messages: ChatMessage[], maxTokens = 1000, apiKeyOv
     }
     const data = await resp.json();
     return data.content?.[0]?.text || '';
+  } else if (isAPI2DKey(apiKey)) {
+    // API2D relay service
+    const resp = await fetch(API2D_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: API2D_MODEL,
+        max_tokens: maxTokens,
+        messages,
+      }),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`API2D错误 ${resp.status}: ${errText.substring(0, 200)}`);
+    }
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content || '';
+  } else if (isOpenAIKey(apiKey)) {
+    // OpenAI official
+    const resp = await fetch(OPENAI_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        max_tokens: maxTokens,
+        messages,
+      }),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`OpenAI API错误 ${resp.status}: ${errText.substring(0, 200)}`);
+    }
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content || '';
   } else {
+    // OpenRouter (default)
     const resp = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {

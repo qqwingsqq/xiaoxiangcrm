@@ -56,47 +56,9 @@ export async function analyzeImage(filePath: string, filename: string): Promise<
 export async function testApiKey(key?: string): Promise<{ valid: boolean; error?: string }> {
   try {
     if (key) {
-      const isAnthropic = key.startsWith('sk-ant-');
-      if (isAnthropic) {
-        const resp = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': key,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 10,
-            messages: [{ role: 'user', content: 'hi' }],
-          }),
-        });
-        if (resp.ok) return { valid: true };
-        if (resp.status === 429) return { valid: true };
-        if (resp.status === 401) return { valid: false, error: 'API Key 无效（401 认证失败）' };
-        if (resp.status === 403) return { valid: false, error: 'API Key 无权限（403）' };
-        const errText = await resp.text();
-        return { valid: false, error: `Anthropic API错误 ${resp.status}: ${errText.substring(0, 100)}` };
-      } else {
-        const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${key}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'nvidia/nemotron-3-nano-30b-a3b:free',
-            max_tokens: 10,
-            messages: [{ role: 'user', content: 'hi' }],
-          }),
-        });
-        if (resp.ok) return { valid: true };
-        if (resp.status === 429) return { valid: true };
-        if (resp.status === 401) return { valid: false, error: 'API Key 无效（401 认证失败）' };
-        if (resp.status === 403) return { valid: false, error: 'API Key 无权限（403）' };
-        const errText = await resp.text();
-        return { valid: false, error: `OpenRouter API错误 ${resp.status}: ${errText.substring(0, 100)}` };
-      }
+      // Use callAI with the provided key to test
+      await callAI([{ role: 'user', content: 'hi' }], 10, key);
+      return { valid: true };
     }
     await callAI([{ role: 'user', content: 'hi' }], 10);
     return { valid: true };
